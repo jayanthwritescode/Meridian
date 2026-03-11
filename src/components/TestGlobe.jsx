@@ -1,11 +1,11 @@
 import { useRef, useEffect } from 'react';
 import Globe from 'react-globe.gl';
 
-export function GlobeView() {
+export function TestGlobe() {
   const globeEl = useRef();
 
   useEffect(() => {
-    console.log('GlobeView mounted');
+    console.log('TestGlobe mounted');
     if (globeEl.current) {
       console.log('Globe ref is available');
     }

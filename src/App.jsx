@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Header } from './components/Header';
 import { GlobeView } from './components/GlobeView';
+import { TestGlobe } from './components/TestGlobe';
 import { Sidebar } from './components/Sidebar';
 import { DetailPanel } from './components/DetailPanel';
 import { vessels } from './data/routes';
@@ -10,6 +11,7 @@ function App() {
   const [selectedVessel, setSelectedVessel] = useState(null);
   const [hoveredVessel, setHoveredVessel] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const [useTestGlobe, setUseTestGlobe] = useState(true);
   const globeRef = useRef(null);
 
   // Update vessel positions with fallback data
@@ -43,26 +45,27 @@ function App() {
       {/* Header */}
       <Header connectionStatus={connectionStatus} />
 
+      {/* Test toggle */}
+      <div className="absolute top-20 right-4 z-50">
+        <button
+          onClick={() => setUseTestGlobe(!useTestGlobe)}
+          className="bg-navy/90 border border-white/20 rounded px-3 py-2 font-mono text-xs text-white hover:bg-navy"
+        >
+          {useTestGlobe ? 'Use Full App' : 'Use Test Globe'}
+        </button>
+      </div>
+
       {/* Main Content */}
       <div className="flex h-full pt-32">
-        {/* Sidebar */}
-        <Sidebar 
-          vessels={vesselPositions}
-          selectedVessel={selectedVessel}
-          onVesselSelect={handleVesselSelect}
-          onVesselFocus={handleVesselFocus}
-        />
-
-        {/* Globe */}
-        <div className="flex-1 relative">
-          <GlobeView 
-            ref={globeRef}
-            selectedVessel={selectedVessel}
-            onVesselSelect={handleVesselSelect}
-            onVesselHover={handleVesselHover}
-            onConnectionStatusChange={setConnectionStatus}
-          />
-        </div>
+        {useTestGlobe ? (
+          <div className="flex-1">
+            <TestGlobe />
+          </div>
+        ) : (
+          <div className="flex-1">
+            <GlobeView />
+          </div>
+        )}
       </div>
 
       {/* Detail Panel */}
