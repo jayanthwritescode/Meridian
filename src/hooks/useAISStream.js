@@ -1,55 +1,126 @@
 import { useState, useEffect, useRef } from 'react';
 
-export function useAISStream(mmsiList) {
+export function useAISStream(watchlistMMSIs = []) {
   const [positions, setPositions] = useState(new Map());
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const socketRef = useRef(null);
+  const [vessels, setVessels] = useState(new Map());
+  const [connectionStatus, setConnectionStatus] = useState('offline');
+  const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
-  const reconnectAttempts = useRef(0);
+  const lastMessageRef = useRef(null);
+
+  const boundingBoxes = [
+    // English Channel / North Sea
+    [[48, -5], [58, 10]],
+    // Strait of Malacca
+    [[-2, 99], [8, 105]],
+    // Suez Canal approaches
+    [[27, 31], [35, 37]],
+    // South China Sea
+    [[0, 108], [25, 122]],
+    // US East Coast ports
+    [[25, -82], [45, -65]],
+    // Santos / South Atlantic
+    [[-28, -50], [-18, -38]]
+  ];
 
   const connect = () => {
-    try {
-      setConnectionStatus('connecting');
-      // Temporarily disable AIS connection to show ship properly
-      console.log('AIS connection temporarily disabled for testing');
-      setConnectionStatus('disconnected');
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
+    }
 
-      socketRef.current.onopen = () => {
-        console.log('AIS WebSocket connected');
+    setConnectionStatus('connecting');
+    
+    try {
+      const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+      wsRef.current = ws;
+
+      ws.onopen = () => {
         setConnectionStatus('connected');
-        reconnectAttempts.current = 0;
-
-        const message = {
-          Apikey: import.meta.env.VITE_AISSTREAM_KEY || 'demo',
-          BoundingBoxes: [[[-90, -180], [90, 180]]],
-          FiltersShipMMSI: mmsiList,
-          FilterMessageTypes: ['PositionReport']
+        console.log('AIS WebSocket connected');
+        
+        // Subscribe to bounding boxes
+        const subscribeMessage = {
+          APIKey: import.meta.env.VITE_AISSTREAM_KEY || 'demo', // Use demo key for testing
+          FilterMessageTypes: ["PositionReport"],
+          BoundingBoxes: boundingBoxes
         };
 
-        socketRef.current.send(JSON.stringify(message));
+        // Add watchlist MMSIs if any
+        if (watchlistMMSIs.length > 0) {
+          subscribeMessage.FiltersShipMMSI = watchlistMMSIs;
+        }
+
+        ws.send(JSON.stringify(subscribeMessage));
+        console.log('Subscribed to AIS stream with bounding boxes:', boundingBoxes);
       };
 
-      socketRef.current.onmessage = (event) => {
+      ws.onmessage = (event) => {
+        lastMessageRef.current = Date.now();
+        
         try {
           const data = JSON.parse(event.data);
           
           if (data.MessageType === 'PositionReport') {
-            const { MetaData, PositionReport } = data;
-            const mmsi = MetaData.MMSI;
+            const { MMSI, Latitude, Longitude, Speed, Heading, Course, ShipName, ShipType, IMO, Destination } = data;
             
-            if (mmsiList.includes(mmsi.toString())) {
-              const newPosition = {
-                lat: PositionReport.Latitude,
-                lon: PositionReport.Longitude,
-                speed: PositionReport.Sog,
-                heading: PositionReport.Cog,
-                timestamp: new Date().toISOString()
-              };
+            if (Latitude && Longitude) {
+              // Update positions map (for backward compatibility)
+              setPositions(prev => {
+                const newMap = new Map(prev);
+                newMap.set(MMSI, {
+                  lat: Latitude,
+                  lon: Longitude,
+                  speed: Speed,
+                  heading: Heading,
+                  course: Course,
+                  timestamp: Date.now()
+                });
+                return newMap;
+              });
 
-              setPositions(prev => new Map(prev.set(mmsi, newPosition)));
-              setLastUpdate(new Date());
+              // Update vessels map with full AIS data
+              setVessels(prev => {
+                const newMap = new Map(prev);
+                const existingVessel = newMap.get(MMSI);
+                
+                const vesselData = {
+                  mmsi: MMSI,
+                  name: ShipName || `MMSI: ${MMSI}`,
+                  lat: Latitude,
+                  lon: Longitude,
+                  speed: Speed || 0,
+                  heading: Heading || 0,
+                  course: Course || 0,
+                  shipType: ShipType,
+                  shipName: ShipName,
+                  imo: IMO,
+                  destination: Destination,
+                  timestamp: Date.now(),
+                  firstSeen: existingVessel?.firstSeen || Date.now()
+                };
+                
+                newMap.set(MMSI, vesselData);
+                
+                // Cap at 200 vessels - remove oldest if exceeded
+                if (newMap.size > 200) {
+                  let oldestMMSI = null;
+                  let oldestTimestamp = Infinity;
+                  
+                  for (const [mmsi, vessel] of newMap) {
+                    if (vessel.timestamp < oldestTimestamp) {
+                      oldestTimestamp = vessel.timestamp;
+                      oldestMMSI = mmsi;
+                    }
+                  }
+                  
+                  if (oldestMMSI) {
+                    newMap.delete(oldestMMSI);
+                    console.log(`Removed oldest vessel ${oldestMMSI} to maintain 200 vessel cap`);
+                  }
+                }
+                
+                return newMap;
+              });
             }
           }
         } catch (error) {
@@ -57,66 +128,87 @@ export function useAISStream(mmsiList) {
         }
       };
 
-      socketRef.current.onclose = () => {
-        console.log('AIS WebSocket disconnected');
+      ws.onclose = (event) => {
         setConnectionStatus('reconnecting');
-        scheduleReconnect();
+        console.log('AIS WebSocket disconnected, attempting reconnect...');
+        
+        // Attempt reconnection after 5 seconds
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connect();
+        }, 5000);
       };
 
-      socketRef.current.onerror = (error) => {
-        console.error('AIS WebSocket error:', error);
+      ws.onerror = (error) => {
         setConnectionStatus('error');
+        console.error('AIS WebSocket error:', error);
       };
 
     } catch (error) {
-      console.error('Failed to create AIS WebSocket:', error);
       setConnectionStatus('error');
-      scheduleReconnect();
+      console.error('Failed to create AIS WebSocket connection:', error);
     }
   };
 
-  const scheduleReconnect = () => {
+  const disconnect = () => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
-
-    const delays = [5000, 10000, 20000, 30000];
-    const delay = delays[Math.min(reconnectAttempts.current, delays.length - 1)];
     
-    reconnectTimeoutRef.current = setTimeout(() => {
-      reconnectAttempts.current++;
-      connect();
-    }, delay);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    
+    setConnectionStatus('offline');
   };
-
-  useEffect(() => {
-    connect();
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-    };
-  }, [mmsiList]);
 
   // Check for stale data
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (lastUpdate) {
-        const now = new Date();
-        const secondsSinceUpdate = (now - lastUpdate) / 1000;
-        
-        if (secondsSinceUpdate > 30) {
+    const checkStale = setInterval(() => {
+      if (connectionStatus === 'connected' && lastMessageRef.current) {
+        const timeSinceLastMessage = Date.now() - lastMessageRef.current;
+        if (timeSinceLastMessage > 30000) { // 30 seconds
           setConnectionStatus('stale');
         }
       }
     }, 10000);
 
-    return () => clearInterval(interval);
-  }, [lastUpdate]);
+    return () => clearInterval(checkStale);
+  }, [connectionStatus]);
 
-  return { positions, connectionStatus, lastUpdate };
+  // Initial connection
+  useEffect(() => {
+    connect();
+    
+    return () => {
+      disconnect();
+    };
+  }, []); // Remove watchlistMMSIs dependency to avoid reconnections
+
+  // Reconnect when watchlist changes
+  useEffect(() => {
+    if (connectionStatus === 'connected' && wsRef.current?.readyState === WebSocket.OPEN) {
+      // Send updated subscription with new watchlist
+      const subscribeMessage = {
+        APIKey: import.meta.env.VITE_AISSTREAM_KEY || 'demo',
+        FilterMessageTypes: ["PositionReport"],
+        BoundingBoxes: boundingBoxes
+      };
+
+      if (watchlistMMSIs.length > 0) {
+        subscribeMessage.FiltersShipMMSI = watchlistMMSIs;
+      }
+
+      wsRef.current.send(JSON.stringify(subscribeMessage));
+      console.log('Updated AIS subscription with watchlist:', watchlistMMSIs);
+    }
+  }, [watchlistMMSIs, connectionStatus]);
+
+  return {
+    positions,
+    vessels,
+    connectionStatus,
+    connect,
+    disconnect
+  };
 }

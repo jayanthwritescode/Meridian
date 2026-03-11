@@ -1,15 +1,60 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { SHIPS, getShipByCode } from '../data/ships';
 import { useAISStream } from '../hooks/useAISStream';
-import { getMMSIList } from '../data/aisConfig';
 import { SHIP_ROUTES } from '../data/routes';
-import { Ship, MapPin, Database, Radio, Activity, Anchor } from 'lucide-react';
+import { Ship, MapPin, Database, Radio, Activity, Anchor, X, Menu } from 'lucide-react';
 
-export function ShipSelector({ selectedShip, onShipSelect }) {
+export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMenuToggle }) {
   const [shipCode, setShipCode] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const mmsiList = getMMSIList();
-  const { connectionStatus } = useAISStream(mmsiList);
+  const [watchlist, setWatchlist] = useState(new Map());
+  const [showCursor, setShowCursor] = useState(true);
+  
+  // Featured vessels MMSIs for enrichment
+  const featuredMMSIs = useMemo(() => SHIPS.map(ship => ship.mmsi), []);
+  
+  const { vessels, connectionStatus } = useAISStream(Array.from(watchlist.keys()));
+
+  // Blinking cursor for loading state
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setShowCursor(prev => !prev);
+    }, 600);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle watchlist management
+  useEffect(() => {
+    if (shipCode.length === 9 && /^\d{9}$/.test(shipCode)) {
+      const mmsi = shipCode;
+      if (!watchlist.has(mmsi)) {
+        const newWatchlist = new Map(watchlist);
+        newWatchlist.set(mmsi, {
+          addedAt: Date.now(),
+          hasSignal: false
+        });
+        setWatchlist(newWatchlist);
+      }
+    }
+  }, [shipCode, watchlist]);
+
+  // Update watchlist when vessels receive signal
+  useEffect(() => {
+    const updatedWatchlist = new Map(watchlist);
+    let hasUpdates = false;
+    
+    for (const [mmsi, watchInfo] of updatedWatchlist) {
+      if (vessels.has(mmsi) && !watchInfo.hasSignal) {
+        watchInfo.hasSignal = true;
+        watchInfo.firstSignalAt = Date.now();
+        hasUpdates = true;
+      }
+    }
+    
+    if (hasUpdates) {
+      setWatchlist(updatedWatchlist);
+    }
+  }, [vessels, watchlist]);
 
   const handleShipSelect = (shipId) => {
     onShipSelect(shipId);
@@ -62,25 +107,367 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
   };
 
   const getVesselColor = (shipId) => {
-    // Map ship IDs to route colors
     const colorMap = {
-      'MSCGULSUN': '#3b82f6', // Blue - Shanghai → Rotterdam
-      'EVERAPEX': '#f59e0b',   // Amber - LA → Tokyo
-      'COSCOFORTUNE': '#a855f7' // Purple - Santos → Antwerp
+      'MSCGULSUN': '#3b82f6',
+      'EVERAPEX': '#f59e0b',
+      'COSCOFORTUNE': '#a855f7'
     };
-    
     return colorMap[shipId] || '#3b82f6';
   };
 
-  const filteredShips = SHIPS.filter(ship => 
-    ship.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ship.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ship.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const getSignalFreshnessColor = (timestamp) => {
+    const age = Date.now() - timestamp;
+    if (age < 30000) return '#22c55e'; // Green - within 30s
+    if (age < 120000) return '#f59e0b'; // Amber - 30-120s
+    return '#6b7280'; // Gray - older
+  };
 
+  const formatTimeAgo = (timestamp) => {
+    const age = Math.floor((Date.now() - timestamp) / 1000);
+    if (age < 60) return `${age}s ago`;
+    if (age < 3600) return `${Math.floor(age / 60)}m ago`;
+    return `${Math.floor(age / 3600)}h ago`;
+  };
+
+  const getShipTypeColor = (shipType) => {
+    if (!shipType) return 'rgba(255,255,255,0.25)';
+    // AIS ship type mapping
+    if (shipType >= 70 && shipType <= 79) return '#3b82f6'; // Cargo
+    if (shipType >= 80 && shipType <= 89) return '#f59e0b'; // Tanker
+    if (shipType >= 60 && shipType <= 69) return '#22c55e'; // Passenger
+    return 'rgba(255,255,255,0.25)';
+  };
+
+  // Filter and sort vessels
+  const { featuredVessels, liveVessels } = useMemo(() => {
+    const featured = [];
+    const live = [];
+    
+    // Process all vessels
+    for (const vessel of vessels.values()) {
+      // Check if this is a featured vessel
+      const featuredShip = SHIPS.find(ship => ship.mmsi === vessel.mmsi);
+      
+      if (featuredShip) {
+        // Enrich with featured data
+        featured.push({
+          ...vessel,
+          id: featuredShip.id,
+          flag: featuredShip.flag,
+          description: featuredShip.description,
+          color: getVesselColor(featuredShip.id)
+        });
+      } else {
+        // Regular live vessel
+        live.push({
+          ...vessel,
+          color: getShipTypeColor(vessel.shipType)
+        });
+      }
+    }
+    
+    // Sort live vessels by timestamp (most recent first)
+    live.sort((a, b) => b.timestamp - a.timestamp);
+    
+    // Filter by search term
+    const filteredLive = live.filter(vessel => 
+      vessel.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vessel.mmsi.toString().includes(searchTerm)
+    );
+    
+    return {
+      featuredVessels: featured,
+      liveVessels: filteredLive
+    };
+  }, [vessels, searchTerm]);
+
+  const clearSearch = () => {
+    setShipCode('');
+    setSearchTerm('');
+  };
+
+  // Check for watchlist timeout
+  const watchlistTimeout = useMemo(() => {
+    for (const [mmsi, info] of watchlist) {
+      if (!info.hasSignal && Date.now() - info.addedAt > 60000) {
+        return mmsi;
+      }
+    }
+    return null;
+  }, [watchlist]);
+
+  if (isMobile) {
+    // Mobile drawer view
+    return (
+      <div style={{
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        width: '300px',
+        height: '100vh',
+        backgroundColor: '#0a0f1e',
+        zIndex: 50,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        transform: 'translateX(0%)'
+      }}>
+        {/* Mobile Header */}
+        <div style={{
+          height: '56px',
+          backgroundColor: '#0a0f1e',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={onMobileMenuToggle}
+              style={{
+                width: '32px',
+                height: '32px',
+                backgroundColor: 'rgba(255,255,255,0.04)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(255,255,255,0.07)',
+                cursor: 'pointer'
+              }}
+            >
+              <X size="16" strokeWidth="1.5" style={{ color: '#f1f5f9' }} />
+            </button>
+            <div>
+              <h3 style={{
+                color: '#f1f5f9',
+                fontWeight: '600',
+                fontSize: '16px',
+                fontFamily: 'Syne, sans-serif',
+                letterSpacing: '0.02em',
+                marginBottom: '2px'
+              }}>Fleet Command</h3>
+              <div style={{
+                fontSize: '11px',
+                fontFamily: 'JetBrains Mono, monospace',
+                color: getStatusColor(),
+                fontWeight: '400',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase'
+              }}>{getStatusText()}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Content - same as desktop but narrower */}
+        <div style={{ 
+          flex: 1,
+          overflowY: 'auto',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px'
+        }}>
+          {/* Search Section */}
+          <div style={{
+            backgroundColor: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: '10px',
+            padding: '12px'
+          }}>
+            <div style={{
+              fontSize: '11px',
+              color: '#64748b',
+              fontFamily: 'JetBrains Mono, monospace',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              marginBottom: '8px',
+              fontWeight: '400'
+            }}>Vessel Search</div>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                value={shipCode}
+                onChange={(e) => {
+                  setShipCode(e.target.value);
+                  setSearchTerm(e.target.value);
+                }}
+                placeholder="Search by name or MMSI..."
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  paddingRight: shipCode ? '36px' : '12px',
+                  backgroundColor: '#0d1526',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: '8px',
+                  color: '#ffffff',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'all 200ms ease'
+                }}
+              />
+              {shipCode && (
+                <button
+                  onClick={clearSearch}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '0'
+                  }}
+                >
+                  <X size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
+                </button>
+              )}
+            </div>
+            {watchlistTimeout && (
+              <div style={{
+                fontSize: '10px',
+                color: '#64748b',
+                fontFamily: 'JetBrains Mono, monospace',
+                marginTop: '6px'
+              }}>
+                No signal for MMSI {watchlistTimeout} — vessel may be out of range
+              </div>
+            )}
+          </div>
+
+          {/* Live Vessels List */}
+          <div>
+            <div style={{
+              fontSize: '11px',
+              color: '#64748b',
+              fontFamily: 'JetBrains Mono, monospace',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              marginBottom: '8px',
+              fontWeight: '400'
+            }}>
+              LIVE VESSELS ({liveVessels.length})
+            </div>
+            
+            {vessels.size === 0 && connectionStatus === 'connected' ? (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '24px 0',
+                color: '#64748b',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '12px'
+              }}>
+                Awaiting AIS signal{showCursor ? '_' : ''}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* Featured vessels */}
+                {featuredVessels.map(ship => (
+                  <button
+                    key={ship.mmsi}
+                    onClick={() => handleShipSelect(ship.id)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: `2px solid ${selectedShip === ship.id ? ship.color : 'rgba(255,255,255,0.07)'}`,
+                      borderLeft: `4px solid ${ship.color}`,
+                      background: selectedShip === ship.id 
+                        ? 'rgba(255,255,255,0.08)' 
+                        : 'rgba(255,255,255,0.04)',
+                      color: '#f1f5f9',
+                      transition: 'all 200ms ease',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontFamily: 'JetBrains Mono, monospace' }}>
+                      FEATURED
+                    </div>
+                    <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '4px', fontFamily: 'Inter, sans-serif' }}>
+                      {ship.name}
+                      <span style={{
+                        marginLeft: '6px',
+                        fontSize: '9px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        borderRadius: '3px',
+                        padding: '1px 3px',
+                        color: '#64748b'
+                      }}>
+                        {getCountryCode(ship.flag)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+                      {ship.speed}kt • {formatTimeAgo(ship.timestamp)}
+                    </div>
+                  </button>
+                ))}
+
+                {/* Live vessels */}
+                {liveVessels.map(vessel => (
+                  <button
+                    key={vessel.mmsi}
+                    onClick={() => handleShipSelect(vessel.mmsi)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                      background: 'rgba(255,255,255,0.04)',
+                      color: '#f1f5f9',
+                      transition: 'all 200ms ease',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: getSignalFreshnessColor(vessel.timestamp),
+                        flexShrink: 0
+                      }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '500', 
+                        fontSize: '12px', 
+                        marginBottom: '2px', 
+                        fontFamily: 'Inter, sans-serif',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {vessel.name}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+                        {vessel.speed}kt • {formatTimeAgo(vessel.timestamp)}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop view
   return (
     <div style={{
-      width: '100%',
+      width: '280px',
       height: '100%',
       backgroundColor: '#0a0f1e',
       display: 'flex',
@@ -174,36 +561,57 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
           <div style={{ position: 'relative' }}>
             <input
               type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search the fleet..."
+              value={shipCode}
+              onChange={(e) => {
+                setShipCode(e.target.value);
+                setSearchTerm(e.target.value);
+              }}
+              placeholder="Search by name or MMSI..."
               style={{
                 width: '100%',
                 padding: '12px 16px',
+                paddingRight: shipCode ? '40px' : '16px',
                 backgroundColor: '#0d1526',
                 border: '1px solid rgba(255,255,255,0.07)',
                 borderRadius: '8px',
                 color: '#ffffff',
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: 'JetBrains Mono, monospace',
                 fontSize: '14px',
                 outline: 'none',
                 transition: 'all 200ms ease'
               }}
             />
-            <div style={{
-              position: 'absolute',
-              right: '16px',
-              top: '14px',
-              color: '#64748b'
-            }}>
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
+            {shipCode && (
+              <button
+                onClick={clearSearch}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '0'
+                }}
+              >
+                <X size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
+              </button>
+            )}
           </div>
+          {watchlistTimeout && (
+            <div style={{
+              fontSize: '10px',
+              color: '#64748b',
+              fontFamily: 'JetBrains Mono, monospace',
+              marginTop: '8px'
+            }}>
+              No signal for MMSI {watchlistTimeout} — vessel may be out of range
+            </div>
+          )}
         </div>
 
-        {/* Active Fleet */}
+        {/* Live Vessels */}
         <div>
           <div style={{
             fontSize: '11px',
@@ -213,202 +621,62 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
             textTransform: 'uppercase',
             marginBottom: '12px',
             fontWeight: '400'
-          }}>Active Fleet ({filteredShips.length})</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {filteredShips.length === 0 ? (
-              <div style={{ 
-                textAlign: 'center', 
-                padding: '32px 0',
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                borderRadius: '10px'
-              }}>
-                <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" style={{ color: '#64748b', marginBottom: '12px' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <div style={{ color: '#64748b', fontFamily: 'Inter, sans-serif', fontSize: '14px' }}>
-                  No vessels found
-                </div>
-                <div style={{ color: '#334155', fontSize: '12px', marginTop: '4px' }}>
-                  Try different search terms
-                </div>
-              </div>
-            ) : (
-              filteredShips.map(ship => {
-                const vesselColor = getVesselColor(ship.id);
-                const isSelected = selectedShip === ship.id;
-                
-                return (
-                  <button
-                    key={ship.id}
-                    onClick={() => handleShipSelect(ship.id)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '16px',
-                      borderRadius: '10px',
-                      border: `2px solid ${isSelected ? vesselColor : 'rgba(255,255,255,0.07)'}`,
-                      borderLeft: `4px solid ${vesselColor}`,
-                      background: isSelected 
-                        ? 'rgba(255,255,255,0.08)' 
-                        : 'rgba(255,255,255,0.04)',
-                      color: '#f1f5f9',
-                      transition: 'all 200ms ease',
-                      cursor: 'pointer'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.target.style.background = 'rgba(255,255,255,0.06)';
-                        e.target.style.borderColor = 'rgba(255,255,255,0.14)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) {
-                        e.target.style.background = 'rgba(255,255,255,0.04)';
-                        e.target.style.borderColor = 'rgba(255,255,255,0.07)';
-                      }
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <Ship size="20" strokeWidth="1.5" style={{ color: vesselColor }} />
-                        <div>
-                          <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px', fontFamily: 'Inter, sans-serif' }}>
-                            {ship.name}
-                            <span style={{
-                              marginLeft: '8px',
-                              fontSize: '10px',
-                              fontFamily: 'JetBrains Mono, monospace',
-                              backgroundColor: 'rgba(255,255,255,0.08)',
-                              border: '1px solid rgba(255,255,255,0.12)',
-                              borderRadius: '4px',
-                              padding: '2px 5px',
-                              color: '#64748b'
-                            }}>
-                              {getCountryCode(ship.flag)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          width: '12px',
-                          height: '12px',
-                          borderRadius: '50%',
-                          backgroundColor: vesselColor,
-                          boxShadow: `0 0 6px ${vesselColor}`
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ fontSize: '12px', lineHeight: '1.4', color: '#64748b' }}>
-                      <div style={{ marginBottom: '4px' }}>{ship.description}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
-                        <MapPin size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
-                        <span>{getRouteInfo(ship.id)}</span>
-                      </div>
-                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', marginTop: '4px', color: '#334155' }}>
-                        ID: {ship.id} • MMSI: {ship.mmsi}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Quick Track */}
-        <div style={{
-          backgroundColor: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: '10px',
-          padding: '16px'
-        }}>
-          <div style={{
-            fontSize: '11px',
-            color: '#64748b',
-            fontFamily: 'JetBrains Mono, monospace',
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            marginBottom: '12px',
-            fontWeight: '400'
-          }}>Quick Track</div>
-          <form onSubmit={handleCodeSubmit} style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              value={shipCode}
-              onChange={(e) => setShipCode(e.target.value)}
-              placeholder="Enter vessel ID..."
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                backgroundColor: '#0d1526',
-                border: '1px solid rgba(255,255,255,0.07)',
-                borderRadius: '8px',
-                color: '#ffffff',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'all 200ms ease'
-              }}
-            />
-            <button
-              type="submit"
-              style={{
-                padding: '12px 20px',
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                color: '#f1f5f9',
-                borderRadius: '8px',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '12px',
-                fontWeight: '400',
-                border: '1px solid rgba(255,255,255,0.07)',
-                cursor: 'pointer',
-                transition: 'all 200ms ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = 'rgba(255,255,255,0.08)';
-                e.target.style.borderColor = 'rgba(255,255,255,0.14)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'rgba(255,255,255,0.04)';
-                e.target.style.borderColor = 'rgba(255,255,255,0.07)';
-              }}
-            >
-              Track
-            </button>
-          </form>
-        </div>
-
-        {selectedShip && (
-          <div style={{
-            backgroundColor: 'rgba(10,15,30,0.92)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: '16px 16px 0 0',
-            padding: '20px 24px'
           }}>
-            {/* Selected Vessel */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{
-                fontSize: '11px',
-                color: '#64748b',
-                fontFamily: 'JetBrains Mono, monospace',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                marginBottom: '12px',
-                fontWeight: '400'
-              }}>Selected Vessel</div>
-              {(() => {
-                const ship = SHIPS.find(s => s.id === selectedShip);
-                const vesselColor = getVesselColor(selectedShip);
-                return ship ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            LIVE VESSELS ({liveVessels.length})
+          </div>
+          
+          {vessels.size === 0 && connectionStatus === 'connected' ? (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '32px 0',
+              color: '#64748b',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '12px'
+            }}>
+              Awaiting AIS signal{showCursor ? '_' : ''}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Featured vessels */}
+              {featuredVessels.map(ship => (
+                <button
+                  key={ship.mmsi}
+                  onClick={() => handleShipSelect(ship.id)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '16px',
+                    borderRadius: '10px',
+                    border: `2px solid ${selectedShip === ship.id ? ship.color : 'rgba(255,255,255,0.07)'}`,
+                    borderLeft: `4px solid ${ship.color}`,
+                    background: selectedShip === ship.id 
+                      ? 'rgba(255,255,255,0.08)' 
+                      : 'rgba(255,255,255,0.04)',
+                    color: '#f1f5f9',
+                    transition: 'all 200ms ease',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedShip !== ship.id) {
+                      e.target.style.background = 'rgba(255,255,255,0.06)';
+                      e.target.style.borderColor = 'rgba(255,255,255,0.14)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedShip !== ship.id) {
+                      e.target.style.background = 'rgba(255,255,255,0.04)';
+                      e.target.style.borderColor = 'rgba(255,255,255,0.07)';
+                    }
+                  }}
+                >
+                  <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '8px', fontFamily: 'JetBrains Mono, monospace' }}>
+                    FEATURED
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <Ship size="24" strokeWidth="1.5" style={{ color: vesselColor }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: '600', color: '#f1f5f9', fontSize: '16px', marginBottom: '4px', fontFamily: 'Inter, sans-serif' }}>
+                      <Ship size="20" strokeWidth="1.5" style={{ color: ship.color }} />
+                      <div>
+                        <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px', fontFamily: 'Inter, sans-serif' }}>
                           {ship.name}
                           <span style={{
                             marginLeft: '8px',
@@ -423,156 +691,91 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
                             {getCountryCode(ship.flag)}
                           </span>
                         </div>
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>
-                          {ship.description}
-                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{ship.description}</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MapPin size="12" strokeWidth="1.5" style={{ color: '#64748b' }} />
-                        <span>{getRouteInfo(ship.id)}</span>
-                      </div>
-                      <div style={{ fontFamily: 'JetBrains Mono, monospace', color: '#334155' }}>
-                        ID: {ship.id} • MMSI: {ship.mmsi}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => onShipSelect('')}
+                    <div
                       style={{
-                        width: '100%',
-                        padding: '12px',
-                        backgroundColor: 'rgba(255,255,255,0.04)',
-                        color: '#64748b',
-                        borderRadius: '8px',
-                        fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: '12px',
-                        fontWeight: '400',
-                        border: '1px solid rgba(255,255,255,0.07)',
-                        cursor: 'pointer',
-                        transition: 'all 200ms ease'
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        backgroundColor: ship.color,
+                        boxShadow: `0 0 6px ${ship.color}`
                       }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255,255,255,0.08)';
-                        e.target.style.borderColor = 'rgba(255,255,255,0.14)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255,255,255,0.04)';
-                        e.target.style.borderColor = 'rgba(255,255,255,0.07)';
-                      }}
-                    >
-                      Clear Selection
-                    </button>
+                    />
                   </div>
-                ) : null;
-              })()}
-            </div>
 
-            {/* Voyage Details */}
-            <div>
-              <div style={{
-                fontSize: '11px',
-                color: '#64748b',
-                fontFamily: 'JetBrains Mono, monospace',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                marginBottom: '12px',
-                fontWeight: '400'
-              }}>Voyage Details</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Ship size="12" strokeWidth="1.5" style={{ color: '#64748b' }} />
-                    Origin
-                  </span>
-                  <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>
-                    {SHIP_ROUTES[selectedShip]?.origin.name}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.114.732a9 9 0 00-6.086-.71l-.108.054a9 9 0 01-6.208-.682L3 4.5M3 15V4.5" />
-                    </svg>
-                    Destination
-                  </span>
-                  <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>
-                    {SHIP_ROUTES[selectedShip]?.destination.name}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3.75 3.75 0 11-7.5 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
-                    </svg>
-                    Waypoints
-                  </span>
-                  <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>
-                    {SHIP_ROUTES[selectedShip]?.waypoints.length}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.114.732a9 9 0 00-6.086-.71l-.108.054a9 9 0 01-6.208-.682L3 4.5M3 15V4.5" />
-                    </svg>
-                    Distance
-                  </span>
-                  <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>
-                    ~{Math.round(SHIP_ROUTES[selectedShip]?.waypoints.length * 500)}nm
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+                  <div style={{ fontSize: '12px', lineHeight: '1.4', color: '#64748b' }}>
+                    <div style={{ marginBottom: '4px' }}>{ship.description}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                      <MapPin size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
+                      <span>{getRouteInfo(ship.id)}</span>
+                    </div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', marginTop: '4px', color: '#334155' }}>
+                      ID: {ship.id} • MMSI: {ship.mmsi} • {ship.speed}kt • {formatTimeAgo(ship.timestamp)}
+                    </div>
+                  </div>
+                </button>
+              ))}
 
-        {/* Fleet Statistics */}
-        <div style={{
-          backgroundColor: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: '10px',
-          padding: '16px'
-        }}>
-          <div style={{
-            fontSize: '11px',
-            color: '#64748b',
-            fontFamily: 'JetBrains Mono, monospace',
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            marginBottom: '12px',
-            fontWeight: '400'
-          }}>Fleet Statistics</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Database size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
-                Data Source
-              </span>
-              <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>AISStream.io</span>
+              {/* Live vessels */}
+              {liveVessels.map(vessel => (
+                <button
+                  key={vessel.mmsi}
+                  onClick={() => handleShipSelect(vessel.mmsi)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    background: 'rgba(255,255,255,0.04)',
+                    color: '#f1f5f9',
+                    transition: 'all 200ms ease',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'rgba(255,255,255,0.06)';
+                    e.target.style.borderColor = 'rgba(255,255,255,0.14)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'rgba(255,255,255,0.04)';
+                    e.target.style.borderColor = 'rgba(255,255,255,0.07)';
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: getSignalFreshnessColor(vessel.timestamp),
+                      flexShrink: 0
+                    }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      fontWeight: '500', 
+                      fontSize: '13px', 
+                      marginBottom: '4px', 
+                      fontFamily: 'Inter, sans-serif',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {vessel.name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+                      {vessel.speed}kt • {formatTimeAgo(vessel.timestamp)}
+                      {vessel.destination && ` • ${vessel.destination}`}
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Radio size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
-                Tracked
-              </span>
-              <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>{mmsiList.length} vessels</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Ship size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
-                Available
-              </span>
-              <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>{SHIPS.length} ships</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Activity size="14" strokeWidth="1.5" style={{ color: '#64748b' }} />
-                Status
-              </span>
-              <span style={{ color: '#ffffff', fontFamily: 'JetBrains Mono, monospace' }}>Active</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

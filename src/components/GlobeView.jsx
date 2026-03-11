@@ -1,207 +1,233 @@
-import { useRef, useEffect, useState } from 'react';
-import Globe from 'react-globe.gl';
-import { SHIPS, getShipById, getShipByMMSI } from '../data/ships';
+import { useRef, useEffect, useState, useMemo } from 'react';
+import { SHIPS, getShipById } from '../data/ships';
 import { useAISStream } from '../hooks/useAISStream';
-import { getMMSIList } from '../data/aisConfig';
-import { getRouteCoordinates, getShipProgress } from '../data/routes';
+import { SHIP_ROUTES } from '../data/routes';
 
-export function GlobeView({ selectedShip }) {
+export function GlobeView({ selectedShip, width, height }) {
   const globeEl = useRef();
-  const mmsiList = getMMSIList();
-  const { positions, connectionStatus } = useAISStream(mmsiList);
+  const { vessels } = useAISStream([]);
   const [shipProgress, setShipProgress] = useState(0);
 
-  // Merge static ship data with AIS positions
-  const displayShips = selectedShip 
-    ? SHIPS.filter(ship => ship.id === selectedShip).map(ship => {
-        const aisData = positions.get(ship.mmsi);
-        const currentPosition = aisData 
-          ? { lat: aisData.lat, lon: aisData.lon }
-          : { lat: ship.lat, lon: ship.lon };
-          
-        return {
-          ...ship,
-          lat: currentPosition.lat,
-          lon: currentPosition.lon,
-          speed: aisData?.speed || null,
-          heading: aisData?.heading || null,
-          live: !!aisData,
-          lastUpdate: aisData?.timestamp || null
-        };
-      })
-    : [];
+  // Get featured vessels (enriched live data)
+  const featuredVessels = useMemo(() => {
+    if (!selectedShip) return [];
+    
+    const featuredShip = SHIPS.find(ship => ship.id === selectedShip);
+    if (!featuredShip) return [];
+    
+    // Find corresponding live vessel data
+    const liveVessel = vessels.get(featuredShip.mmsi);
+    
+    return [{
+      ...featuredShip,
+      lat: liveVessel?.lat || featuredShip.lat,
+      lon: liveVessel?.lon || featuredShip.lon,
+      speed: liveVessel?.speed || null,
+      heading: liveVessel?.heading || null,
+      live: !!liveVessel,
+      lastUpdate: liveVessel?.timestamp || null
+    }];
+  }, [selectedShip, vessels]);
 
-  // Get route arcs for selected ship with proper altitude and animation
-  const routeArcs = selectedShip 
-    ? (() => {
-        const coords = getRouteCoordinates(selectedShip);
-        const shipColor = getShipById(selectedShip)?.color || '#3b82f6';
-        
-        const arcs = coords.map((coord, index) => {
-          if (index === 0) return null;
-          const prevCoord = coords[index - 1];
-          
-          return {
-            startLat: prevCoord.lat,
-            startLng: prevCoord.lon,
-            endLat: coord.lat,
-            endLng: coord.lon,
-            color: shipColor
-          };
-        }).filter(Boolean);
-        
-        return arcs;
-      })()
-    : [];
+  // Get non-featured live vessels for performance rendering
+  const liveVesselsPoints = useMemo(() => {
+    const featuredMMSIs = new Set(SHIPS.map(ship => ship.mmsi));
+    
+    return Array.from(vessels.values())
+      .filter(vessel => !featuredMMSIs.has(vessel.mmsi))
+      .map(vessel => ({
+        lat: vessel.lat,
+        lon: vessel.lon,
+        size: 1,
+        color: getShipTypeColor(vessel.shipType),
+        mmsi: vessel.mmsi,
+        name: vessel.name,
+        speed: vessel.speed,
+        heading: vessel.heading,
+        timestamp: vessel.timestamp
+      }));
+  }, [vessels]);
 
-  // Get all unique ports from all routes for labeling
-  const allPorts = selectedShip 
-    ? (() => {
-        const route = getRouteCoordinates(selectedShip);
-        const uniquePorts = new Set();
-        const portData = [];
-        
-        // Add origin and destination with labels
-        if (route.length > 0) {
-          // Origin
-          const origin = route[0];
-          if (!uniquePorts.has(`${origin.lat},${origin.lon}`)) {
-            uniquePorts.add(`${origin.lat},${origin.lon}`);
-            portData.push({
-              lat: origin.lat,
-              lon: origin.lon,
-              size: 1.5,
-              color: '#10b981',
-              label: origin.name,
-              isPort: true,
-              isOrigin: true
-            });
-          }
-          
-          // Destination
-          const destination = route[route.length - 1];
-          if (!uniquePorts.has(`${destination.lat},${destination.lon}`)) {
-            uniquePorts.add(`${destination.lat},${destination.lon}`);
-            portData.push({
-              lat: destination.lat,
-              lon: destination.lon,
-              size: 1.5,
-              color: '#ef4444',
-              label: destination.name,
-              isPort: true,
-              isDestination: true
-            });
-          }
-        }
-        
-        return portData;
-      })()
-    : [];
+  // Get route arcs for selected ship
+  const routeArcs = useMemo(() => {
+    if (!selectedShip) return [];
+    
+    const coords = getRouteCoordinates(selectedShip);
+    const shipColor = getShipById(selectedShip)?.color || '#3b82f6';
+    
+    return coords.map((coord, index) => {
+      if (index === 0) return null;
+      const prevCoord = coords[index - 1];
+      
+      return {
+        startLat: prevCoord.lat,
+        startLng: prevCoord.lon,
+        endLat: coord.lat,
+        endLng: coord.lon,
+        color: shipColor
+      };
+    }).filter(Boolean);
+  }, [selectedShip]);
 
-  // Ship position markers - flat dots on surface
-  const shipMarkers = selectedShip && displayShips.length > 0 
-    ? displayShips.map(ship => ({
-        ...ship,
-        size: 2,
-        isShip: true,
-        color: ship.color
-      }))
-    : [];
+  // Get port markers
+  const portMarkers = useMemo(() => {
+    if (!selectedShip) return [];
+    
+    return getRouteCoordinates(selectedShip).map((coord, index) => {
+      const isOrigin = index === 0;
+      const isDestination = index === getRouteCoordinates(selectedShip).length - 1;
+      
+      return {
+        lat: coord.lat,
+        lon: coord.lon,
+        size: isOrigin || isDestination ? 2.0 : 0.5,
+        color: isOrigin ? '#10b981' : isDestination ? '#ef4444' : '#6b7280',
+        label: coord.name,
+        isOrigin,
+        isDestination
+      };
+    });
+  }, [selectedShip]);
 
-  // Sonar pulse rings for ships
-  const shipRings = selectedShip && displayShips.length > 0
-    ? displayShips.map(ship => ({
-        lat: ship.lat,
-        lng: ship.lon,
-        color: ship.color,
-        maxRadius: 2,
-        propagationSpeed: 1,
-        repeatPeriod: 3000
-      }))
-    : [];
+  // Port labels for featured vessels only
+  const portLabels = useMemo(() => {
+    return portMarkers.filter(p => p.isOrigin || p.isDestination).map(port => ({
+      lat: port.lat,
+      lon: port.lon,
+      size: 0.1,
+      color: port.color,
+      label: port.label,
+      isLabel: true
+    }));
+  }, [portMarkers]);
+
+  // Featured vessel markers with enhanced styling
+  const featuredVesselMarkers = useMemo(() => {
+    return featuredVessels.map(ship => ({
+      ...ship,
+      size: 6,
+      isFeatured: true,
+      color: getShipById(ship.id)?.color || '#3b82f6'
+    }));
+  }, [featuredVessels]);
+
+  // Pulsing rings for featured vessel ports only
+  const portRings = useMemo(() => {
+    return portMarkers.filter(p => p.isOrigin || p.isDestination).map(port => ({
+      lat: port.lat,
+      lng: port.lon,
+      color: port.color,
+      maxRadius: 3,
+      propagationSpeed: 1.5,
+      repeatPeriod: 2000
+    }));
+  }, [portMarkers]);
 
   // Update ship progress
   useEffect(() => {
-    if (selectedShip && displayShips.length > 0) {
-      const progress = getShipProgress(selectedShip, displayShips[0]);
+    if (selectedShip && featuredVessels.length > 0) {
+      const progress = getShipProgress(selectedShip, featuredVessels[0]);
       setShipProgress(progress);
     }
-  }, [selectedShip, displayShips]);
+  }, [selectedShip, featuredVessels]);
 
+  // Globe controls
   useEffect(() => {
     if (globeEl.current) {
       globeEl.current.controls().autoRotate = true;
       globeEl.current.controls().autoRotateSpeed = 0.4;
       
-      // Focus on selected ship
-      if (selectedShip) {
-        const ship = getShipById(selectedShip);
-        if (ship) {
-          setTimeout(() => {
-            globeEl.current.pointOfView(
-              { lat: ship.lat, lng: ship.lon, altitude: 1.5 },
-              1000
-            );
-          }, 500);
-        }
+      if (selectedShip && featuredVessels.length > 0) {
+        const ship = featuredVessels[0];
+        setTimeout(() => {
+          globeEl.current.pointOfView(
+            { lat: ship.lat, lng: ship.lon, altitude: 1.5 },
+            1000
+          );
+        }, 500);
       }
     }
-  }, [selectedShip]);
+  }, [selectedShip, featuredVessels]);
+
+  // Combine all points for single rendering
+  const allPoints = useMemo(() => {
+    const points = [];
+    
+    // Add featured vessels first (non-merged)
+    featuredVesselMarkers.forEach(ship => {
+      points.push({
+        ...ship,
+        isFeatured: true,
+        altitude: 0.2
+      });
+    });
+    
+    // Add live vessels (merged)
+    liveVesselsPoints.forEach(vessel => {
+      points.push({
+        ...vessel,
+        isLive: true,
+        altitude: 0.02
+      });
+    });
+    
+    return points;
+  }, [featuredVesselMarkers, liveVesselsPoints]);
 
   return (
-    <div style={{ width: '100%', height: '100vh' }}>
+    <div style={{ width: width || '100%', height: height || '100vh' }}>
       <Globe
         ref={globeEl}
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
         backgroundColor="#0a0f1e"
         atmosphereColor="#1a6eff"
-        atmosphereAltitude={0.25}
+        atmosphereAltitude={0.15}
         
-        // Route arcs with proper altitude and animation
+        // Route arcs
         arcsData={routeArcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
         arcEndLat="endLat"
         arcEndLng="endLng"
-        arcColor={() => ['#ffffff', '#ffffff']}
-        arcStroke={1.5}
+        arcColor="color"
+        arcStroke={2}
         arcAltitude={0.08}
         arcDashLength={0.4}
-        arcDashGap={0.3}
+        arcDashGap={0.2}
         arcDashAnimateTime={1500}
         
-        // Port markers
-        pointsData={allPorts}
+        // Combined points data
+        pointsData={allPoints}
         pointLat="lat"
         pointLng="lon"
         pointColor="color"
         pointRadius="size"
-        pointAltitude={0.01}
-        pointLabel="label"
-        pointLabelSize={12}
-        pointLabelColor="#ffffff"
-        pointLabelResolution={2}
-        pointLabelAltitude={0.02}
+        pointAltitude={d => d.altitude}
+        pointsMerge={d => !d.isFeatured} // Only merge non-featured vessels
         
-        // Ship markers
-        pointsMerge={false}
-        pointsData={shipMarkers}
-        pointLat="lat"
-        pointLng="lon"
-        pointColor="color"
-        pointRadius="size"
-        pointAltitude={0.0}
-        pointOpacity={1}
+        // Port labels (featured only)
+        htmlElementsData={portLabels}
+        htmlLat="lat"
+        htmlLng="lon"
+        htmlElement={d => {
+          const el = document.createElement('div');
+          el.innerHTML = d.label;
+          el.style.color = '#ffffff';
+          el.style.fontSize = '10px';
+          el.style.fontFamily = 'JetBrains Mono, monospace';
+          el.style.textAlign = 'center';
+          el.style.pointerEvents = 'none';
+          return el;
+        }}
         
-        // Sonar rings for ships
-        ringsData={shipRings}
+        // Port rings (featured only)
+        ringsData={portRings}
         ringLat="lat"
         ringLng="lng"
         ringColor="color"
         ringMaxRadius="maxRadius"
         ringPropagationSpeed="propagationSpeed"
         ringRepeatPeriod="repeatPeriod"
-        ringResolution={64}
       />
       
       {/* Ship progress indicator */}
@@ -210,20 +236,32 @@ export function GlobeView({ selectedShip }) {
           position: 'absolute',
           bottom: '16px',
           left: '16px',
-          backgroundColor: 'rgba(10, 15, 30, 0.9)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          backgroundColor: 'rgba(10,15,30,0.9)',
+          border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: '8px',
           padding: '12px',
           fontFamily: 'JetBrains Mono, monospace',
-          fontSize: '12px'
+          fontSize: '12px',
+          color: '#ffffff',
+          zIndex: 40
         }}>
-          <div style={{ color: 'white', fontWeight: 'bold', marginBottom: '8px' }}>Route Progress</div>
           <div style={{ 
-            width: '192px', 
-            backgroundColor: '#374151', 
-            borderRadius: '4px', 
-            height: '8px', 
-            marginBottom: '8px' 
+            color: '#ffffff', 
+            fontWeight: '600', 
+            marginBottom: '8px',
+            fontSize: '11px',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase'
+          }}>
+            Route Progress
+          </div>
+          <div style={{
+            width: '192px',
+            backgroundColor: 'rgba(255,255,255,0.1)',
+            borderRadius: '4px',
+            height: '6px',
+            marginBottom: '6px',
+            overflow: 'hidden'
           }}>
             <div 
               style={{
