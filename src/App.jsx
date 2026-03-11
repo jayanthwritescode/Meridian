@@ -6,13 +6,31 @@ function App() {
   const [selectedShip, setSelectedShip] = useState('');
 
   return (
-    <div className="w-full h-screen bg-navy relative overflow-hidden">
-      <ShipSelector 
-        selectedShip={selectedShip} 
-        onShipSelect={setSelectedShip} 
-      />
+    <div style={{ 
+      width: '100vw', 
+      height: '100vh', 
+      backgroundColor: '#0a0f1e',
+      display: 'flex',
+      overflow: 'hidden'
+    }}>
+      {/* Main Globe Area */}
+      <div style={{ 
+        flex: 1, 
+        position: 'relative'
+      }}>
+        <GlobeView selectedShip={selectedShip} />
+      </div>
       
-      <GlobeView selectedShip={selectedShip} />
+      {/* Right Sidebar */}
+      <div style={{ 
+        width: '384px', 
+        flexShrink: 0
+      }}>
+        <ShipSelector 
+          selectedShip={selectedShip} 
+          onShipSelect={setSelectedShip} 
+        />
+      </div>
     </div>
   );
 }
