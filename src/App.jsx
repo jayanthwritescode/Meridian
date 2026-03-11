@@ -157,16 +157,18 @@ function App() {
 
         {/* Mobile Menu Drawer */}
         {isMobile && showMobileMenu && (
-          <div style={{
-            position: 'fixed',
-            left: 0,
-            top: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            zIndex: 45,
+          <div 
+            style={{
+              position: 'fixed',
+              left: 0,
+              top: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              zIndex: 45
+            }}
             onClick={handleMobileMenuToggle}
-          }}>
+          >
             <div
               style={{
                 position: 'absolute',
@@ -175,9 +177,9 @@ function App() {
                 width: '300px',
                 height: '100vh',
                 backgroundColor: '#0a0f1e',
-                zIndex: 46,
-                onClick={(e) => e.stopPropagation()}
+                zIndex: 46
               }}
+              onClick={(e) => e.stopPropagation()}
             >
               <ShipSelector 
                 selectedShip={selectedShip} 

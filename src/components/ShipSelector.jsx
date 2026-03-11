@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { SHIPS, getShipByCode } from '../data/ships';
-import { useAISStream } from '../hooks/useAISStream';
+import { useVesselPosition } from '../hooks/useVesselPosition';
 import { SHIP_ROUTES } from '../data/routes';
 import { Ship, MapPin, Database, Radio, Activity, Anchor, X, Menu } from 'lucide-react';
 
@@ -10,10 +10,7 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
   const [watchlist, setWatchlist] = useState(new Map());
   const [showCursor, setShowCursor] = useState(true);
   
-  // Featured vessels MMSIs for enrichment
-  const featuredMMSIs = useMemo(() => SHIPS.map(ship => ship.mmsi), []);
-  
-  const { vessels, connectionStatus } = useAISStream(Array.from(watchlist.keys()));
+  const { featuredVessels: featuredData, liveVessels: liveData, connectionStatus, liveCount } = useVesselPosition();
 
   // Blinking cursor for loading state
   useEffect(() => {
@@ -44,7 +41,7 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
     let hasUpdates = false;
     
     for (const [mmsi, watchInfo] of updatedWatchlist) {
-      if (vessels.has(mmsi) && !watchInfo.hasSignal) {
+      if (liveData.has(mmsi) && !watchInfo.hasSignal) {
         watchInfo.hasSignal = true;
         watchInfo.firstSignalAt = Date.now();
         hasUpdates = true;
@@ -54,9 +51,10 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
     if (hasUpdates) {
       setWatchlist(updatedWatchlist);
     }
-  }, [vessels, watchlist]);
+  }, [liveData, watchlist]);
 
   const handleShipSelect = (shipId) => {
+    console.log('handleShipSelect called with:', shipId);
     onShipSelect(shipId);
   };
 
@@ -139,47 +137,35 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
   };
 
   // Filter and sort vessels
-  const { featuredVessels, liveVessels } = useMemo(() => {
-    const featured = [];
-    const live = [];
+  const { featuredVessels: filteredFeatured, liveVessels: filteredLive } = useMemo(() => {
+    // Featured vessels from the new data layer
+    const featured = Object.values(featuredData);
     
-    // Process all vessels
-    for (const vessel of vessels.values()) {
-      // Check if this is a featured vessel
-      const featuredShip = SHIPS.find(ship => ship.mmsi === vessel.mmsi);
+    // Live vessels from AIS data (excluding featured)
+    const featuredMMSIs = new Set(featured.map(v => v.mmsi));
+    const live = Array.from(liveData.values()).filter(vessel => !featuredMMSIs.has(vessel.mmsi));
+    
+    // Apply search filter
+    const searchLower = searchTerm.toLowerCase();
+    const filteredFeatured = searchLower 
+      ? featured.filter(ship => 
+          ship.name?.toLowerCase().includes(searchLower) ||
+          ship.mmsi?.includes(searchLower)
+        )
+      : featured;
       
-      if (featuredShip) {
-        // Enrich with featured data
-        featured.push({
-          ...vessel,
-          id: featuredShip.id,
-          flag: featuredShip.flag,
-          description: featuredShip.description,
-          color: getVesselColor(featuredShip.id)
-        });
-      } else {
-        // Regular live vessel
-        live.push({
-          ...vessel,
-          color: getShipTypeColor(vessel.shipType)
-        });
-      }
-    }
-    
-    // Sort live vessels by timestamp (most recent first)
-    live.sort((a, b) => b.timestamp - a.timestamp);
-    
-    // Filter by search term
-    const filteredLive = live.filter(vessel => 
-      vessel.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vessel.mmsi.toString().includes(searchTerm)
-    );
+    const filteredLive = searchLower
+      ? live.filter(vessel => 
+          vessel.name?.toLowerCase().includes(searchLower) ||
+          vessel.mmsi?.includes(searchLower)
+        )
+      : live;
     
     return {
-      featuredVessels: featured,
-      liveVessels: filteredLive
+      featuredVessels: filteredFeatured,
+      liveVessels: filteredLive.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
     };
-  }, [vessels, searchTerm]);
+  }, [featuredData, liveData, searchTerm]);
 
   const clearSearch = () => {
     setShipCode('');
@@ -350,10 +336,10 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
               marginBottom: '8px',
               fontWeight: '400'
             }}>
-              LIVE VESSELS ({liveVessels.length})
+              LIVE VESSELS ({filteredLive.length})
             </div>
             
-            {vessels.size === 0 && connectionStatus === 'connected' ? (
+            {liveCount === 0 && connectionStatus === 'live' ? (
               <div style={{ 
                 textAlign: 'center', 
                 padding: '24px 0',
@@ -366,7 +352,7 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {/* Featured vessels */}
-                {featuredVessels.map(ship => (
+                {filteredFeatured.map(ship => (
                   <button
                     key={ship.mmsi}
                     onClick={() => handleShipSelect(ship.id)}
@@ -410,10 +396,10 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
                 ))}
 
                 {/* Live vessels */}
-                {liveVessels.map(vessel => (
+                {filteredLive.map(vessel => (
                   <button
                     key={vessel.mmsi}
-                    onClick={() => handleShipSelect(vessel.mmsi)}
+                    onClick={() => handleShipSelect(vessel.id || vessel.mmsi)}
                     style={{
                       width: '100%',
                       textAlign: 'left',
@@ -622,10 +608,10 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
             marginBottom: '12px',
             fontWeight: '400'
           }}>
-            LIVE VESSELS ({liveVessels.length})
+            LIVE VESSELS ({filteredLive.length})
           </div>
           
-          {vessels.size === 0 && connectionStatus === 'connected' ? (
+          {liveCount === 0 && connectionStatus === 'live' ? (
             <div style={{ 
               textAlign: 'center', 
               padding: '32px 0',
@@ -638,7 +624,7 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {/* Featured vessels */}
-              {featuredVessels.map(ship => (
+              {filteredFeatured.map(ship => (
                 <button
                   key={ship.mmsi}
                   onClick={() => handleShipSelect(ship.id)}
@@ -719,31 +705,29 @@ export function ShipSelector({ selectedShip, onShipSelect, isMobile, onMobileMen
               ))}
 
               {/* Live vessels */}
-              {liveVessels.map(vessel => (
+              {filteredLive.map(vessel => (
                 <button
                   key={vessel.mmsi}
-                  onClick={() => handleShipSelect(vessel.mmsi)}
+                  onClick={() => handleShipSelect(vessel.id || vessel.mmsi)}
                   style={{
                     width: '100%',
                     textAlign: 'left',
                     padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255,255,255,0.07)',
-                    background: 'rgba(255,255,255,0.04)',
-                    color: '#f1f5f9',
-                    transition: 'all 200ms ease',
+                    border: 'none',
+                    backgroundColor: vessel.id ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.04)',
+                    borderBottom: '1px solid rgba(255,255,255,0.07)',
                     cursor: 'pointer',
+                    transition: 'all 0.2s ease',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px'
+                    gap: '12px',
+                    position: 'relative'
                   }}
                   onMouseEnter={(e) => {
-                    e.target.style.background = 'rgba(255,255,255,0.06)';
-                    e.target.style.borderColor = 'rgba(255,255,255,0.14)';
+                    e.target.style.backgroundColor = vessel.id ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.08)';
                   }}
                   onMouseLeave={(e) => {
-                    e.target.style.background = 'rgba(255,255,255,0.04)';
-                    e.target.style.borderColor = 'rgba(255,255,255,0.07)';
+                    e.target.style.backgroundColor = vessel.id ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.04)';
                   }}
                 >
                   <div

@@ -1,39 +1,27 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
+import Globe from 'react-globe.gl';
 import { SHIPS, getShipById } from '../data/ships';
-import { useAISStream } from '../hooks/useAISStream';
+import { useVesselPosition } from '../hooks/useVesselPosition';
 import { SHIP_ROUTES } from '../data/routes';
 
 export function GlobeView({ selectedShip, width, height }) {
   const globeEl = useRef();
-  const { vessels } = useAISStream([]);
+  const { featuredVessels: featuredData, liveVessels } = useVesselPosition();
   const [shipProgress, setShipProgress] = useState(0);
 
-  // Get featured vessels (enriched live data)
-  const featuredVessels = useMemo(() => {
-    if (!selectedShip) return [];
-    
-    const featuredShip = SHIPS.find(ship => ship.id === selectedShip);
-    if (!featuredShip) return [];
-    
-    // Find corresponding live vessel data
-    const liveVessel = vessels.get(featuredShip.mmsi);
-    
-    return [{
-      ...featuredShip,
-      lat: liveVessel?.lat || featuredShip.lat,
-      lon: liveVessel?.lon || featuredShip.lon,
-      speed: liveVessel?.speed || null,
-      heading: liveVessel?.heading || null,
-      live: !!liveVessel,
-      lastUpdate: liveVessel?.timestamp || null
-    }];
-  }, [selectedShip, vessels]);
+  console.log('GlobeView rendered with selectedShip:', selectedShip);
+
+  // Get selected featured vessel
+  const selectedVessel = useMemo(() => {
+    if (!selectedShip) return null;
+    return featuredData[selectedShip] || null;
+  }, [selectedShip, featuredData]);
 
   // Get non-featured live vessels for performance rendering
   const liveVesselsPoints = useMemo(() => {
-    const featuredMMSIs = new Set(SHIPS.map(ship => ship.mmsi));
+    const featuredMMSIs = new Set(Object.values(featuredData).map(v => v.mmsi));
     
-    return Array.from(vessels.values())
+    return Array.from(liveVessels.values())
       .filter(vessel => !featuredMMSIs.has(vessel.mmsi))
       .map(vessel => ({
         lat: vessel.lat,
@@ -46,7 +34,19 @@ export function GlobeView({ selectedShip, width, height }) {
         heading: vessel.heading,
         timestamp: vessel.timestamp
       }));
-  }, [vessels]);
+  }, [liveVessels, featuredData]);
+
+  // Get featured vessel markers for selected ship
+  const featuredVesselMarkers = useMemo(() => {
+    if (!selectedVessel) return [];
+    
+    return [{
+      ...selectedVessel,
+      size: 6,
+      isFeatured: true,
+      color: selectedVessel.color || '#3b82f6'
+    }];
+  }, [selectedVessel]);
 
   // Get route arcs for selected ship
   const routeArcs = useMemo(() => {
@@ -101,16 +101,6 @@ export function GlobeView({ selectedShip, width, height }) {
     }));
   }, [portMarkers]);
 
-  // Featured vessel markers with enhanced styling
-  const featuredVesselMarkers = useMemo(() => {
-    return featuredVessels.map(ship => ({
-      ...ship,
-      size: 6,
-      isFeatured: true,
-      color: getShipById(ship.id)?.color || '#3b82f6'
-    }));
-  }, [featuredVessels]);
-
   // Pulsing rings for featured vessel ports only
   const portRings = useMemo(() => {
     return portMarkers.filter(p => p.isOrigin || p.isDestination).map(port => ({
@@ -123,13 +113,54 @@ export function GlobeView({ selectedShip, width, height }) {
     }));
   }, [portMarkers]);
 
+  // Combine all points for single rendering
+  const allPoints = useMemo(() => {
+    const points = [];
+    
+    // Add featured vessel points
+    featuredVesselMarkers.forEach(ship => {
+      points.push({
+        lat: ship.lat,
+        lon: ship.lon,
+        size: 1.5,
+        color: ship.color,
+        altitude: 0.1
+      });
+    });
+    
+    // Add live vessel points (smaller, non-featured)
+    liveVesselsPoints.forEach(vessel => {
+      points.push({
+        lat: vessel.lat,
+        lon: vessel.lon,
+        size: 0.8,
+        color: getShipTypeColor(vessel.shipType),
+        altitude: 0.05
+      });
+    });
+    
+    console.log('allPoints debug:', points);
+    return points;
+  }, [featuredVesselMarkers, liveVesselsPoints]);
+
+  // Sonar rings for featured vessels only
+  const vesselRings = useMemo(() => {
+    return featuredVesselMarkers.map(ship => ({
+      lat: ship.lat,
+      lng: ship.lon,
+      color: ship.color,
+      maxRadius: 4,
+      propagationSpeed: 1.5,
+      repeatPeriod: 1500
+    }));
+  }, [featuredVesselMarkers]);
+
   // Update ship progress
   useEffect(() => {
-    if (selectedShip && featuredVessels.length > 0) {
-      const progress = getShipProgress(selectedShip, featuredVessels[0]);
-      setShipProgress(progress);
+    if (selectedVessel) {
+      setShipProgress(selectedVessel.progress || 0);
     }
-  }, [selectedShip, featuredVessels]);
+  }, [selectedVessel]);
 
   // Globe controls
   useEffect(() => {
@@ -137,42 +168,16 @@ export function GlobeView({ selectedShip, width, height }) {
       globeEl.current.controls().autoRotate = true;
       globeEl.current.controls().autoRotateSpeed = 0.4;
       
-      if (selectedShip && featuredVessels.length > 0) {
-        const ship = featuredVessels[0];
+      if (selectedVessel) {
         setTimeout(() => {
           globeEl.current.pointOfView(
-            { lat: ship.lat, lng: ship.lon, altitude: 1.5 },
+            { lat: selectedVessel.lat, lng: selectedVessel.lon, altitude: 1.5 },
             1000
           );
         }, 500);
       }
     }
-  }, [selectedShip, featuredVessels]);
-
-  // Combine all points for single rendering
-  const allPoints = useMemo(() => {
-    const points = [];
-    
-    // Add featured vessels first (non-merged)
-    featuredVesselMarkers.forEach(ship => {
-      points.push({
-        ...ship,
-        isFeatured: true,
-        altitude: 0.2
-      });
-    });
-    
-    // Add live vessels (merged)
-    liveVesselsPoints.forEach(vessel => {
-      points.push({
-        ...vessel,
-        isLive: true,
-        altitude: 0.02
-      });
-    });
-    
-    return points;
-  }, [featuredVesselMarkers, liveVesselsPoints]);
+  }, [selectedVessel]);
 
   return (
     <div style={{ width: width || '100%', height: height || '100vh' }}>
@@ -197,14 +202,6 @@ export function GlobeView({ selectedShip, width, height }) {
         arcDashAnimateTime={1500}
         
         // Combined points data
-        pointsData={allPoints}
-        pointLat="lat"
-        pointLng="lon"
-        pointColor="color"
-        pointRadius="size"
-        pointAltitude={d => d.altitude}
-        pointsMerge={d => !d.isFeatured} // Only merge non-featured vessels
-        
         // Port labels (featured only)
         htmlElementsData={portLabels}
         htmlLat="lat"
@@ -280,4 +277,43 @@ export function GlobeView({ selectedShip, width, height }) {
       )}
     </div>
   );
+}
+
+// Helper functions
+function getShipTypeColor(shipType) {
+  if (!shipType) return 'rgba(255,255,255,0.25)';
+  if (shipType >= 70 && shipType <= 79) return '#3b82f6'; // Cargo
+  if (shipType >= 80 && shipType <= 89) return '#f59e0b'; // Tanker
+  if (shipType >= 60 && shipType <= 69) return '#22c55e'; // Passenger
+  return 'rgba(255,255,255,0.25)';
+}
+
+function getRouteCoordinates(shipId) {
+  console.log('getRouteCoordinates called with shipId:', shipId);
+  const route = SHIP_ROUTES[shipId];
+  console.log('found route:', route);
+  if (!route) return [];
+  
+  const coords = [
+    route.origin,
+    ...route.waypoints,
+    route.destination
+  ];
+  console.log('route coordinates:', coords);
+  return coords;
+}
+
+function getShipProgress(shipId, ship) {
+  const route = SHIP_ROUTES[shipId];
+  if (!route || !ship) return 0;
+  
+  const coords = getRouteCoordinates(shipId);
+  if (coords.length < 2) return 0;
+  
+  // Simple progress calculation based on route waypoints
+  // In a real implementation, you'd calculate actual distance along the route
+  const totalWaypoints = coords.length;
+  const currentWaypoint = Math.floor(Math.random() * totalWaypoints); // Placeholder
+  
+  return currentWaypoint / (totalWaypoints - 1);
 }
