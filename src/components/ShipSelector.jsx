@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SHIPS, getShipByCode } from '../data/ships';
 import { useAISStream } from '../hooks/useAISStream';
 import { getMMSIList } from '../data/aisConfig';
+import { SHIP_ROUTES } from '../data/routes';
 
 export function ShipSelector({ selectedShip, onShipSelect }) {
   const [shipCode, setShipCode] = useState('');
@@ -43,6 +44,12 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
     }
   };
 
+  const getRouteInfo = (shipId) => {
+    const route = SHIP_ROUTES[shipId];
+    if (!route) return '';
+    return `${route.origin.name} → ${route.destination.name}`;
+  };
+
   return (
     <div className="absolute top-4 left-4 z-50 bg-navy/90 border border-white/20 rounded-lg p-4 w-80">
       <div className="flex justify-between items-center mb-3">
@@ -66,6 +73,7 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
           >
             <div className="font-medium">{ship.name}</div>
             <div className="text-xs opacity-75">{ship.description}</div>
+            <div className="text-xs opacity-50 truncate">{getRouteInfo(ship.id)}</div>
             <div className="text-xs opacity-50">MMSI: {ship.mmsi}</div>
           </button>
         ))}
@@ -89,12 +97,24 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
       </form>
 
       {selectedShip && (
-        <button
-          onClick={() => onShipSelect('')}
-          className="w-full mt-2 px-3 py-2 bg-red-600/20 text-red-400 rounded font-mono text-sm hover:bg-red-600/30 transition-colors"
-        >
-          Clear Selection
-        </button>
+        <>
+          <button
+            onClick={() => onShipSelect('')}
+            className="w-full mt-2 px-3 py-2 bg-red-600/20 text-red-400 rounded font-mono text-sm hover:bg-red-600/30 transition-colors"
+          >
+            Clear Selection
+          </button>
+          
+          {/* Route Info */}
+          <div className="mt-3 pt-3 border-t border-white/10">
+            <div className="text-xs text-gray-400 font-mono">
+              <div className="font-bold text-white mb-1">Route Details</div>
+              <div>🚢 {SHIP_ROUTES[selectedShip]?.origin.name}</div>
+              <div>🏁 {SHIP_ROUTES[selectedShip]?.destination.name}</div>
+              <div>⚓ {SHIP_ROUTES[selectedShip]?.waypoints.length} waypoints</div>
+            </div>
+          </div>
+        </>
       )}
 
       <div className="mt-3 pt-3 border-t border-white/10">

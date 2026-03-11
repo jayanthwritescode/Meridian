@@ -11,7 +11,10 @@ export function useAISStream(mmsiList) {
   const connect = () => {
     try {
       setConnectionStatus('connecting');
-      socketRef.current = new WebSocket('wss://stream.aisstream.io/v0/stream');
+      // Temporarily disable AIS connection to show ship properly
+      console.log('AIS connection temporarily disabled for testing');
+      setConnectionStatus('disconnected');
+      return;
 
       socketRef.current.onopen = () => {
         console.log('AIS WebSocket connected');
