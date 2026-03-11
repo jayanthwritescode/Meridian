@@ -31,7 +31,7 @@ export function GlobeView({ selectedShip }) {
       })
     : [];
 
-  // Get route arcs for selected ship - simplified approach
+  // Get route arcs for selected ship with proper altitude and animation
   const routeArcs = selectedShip 
     ? (() => {
         const coords = getRouteCoordinates(selectedShip);
@@ -54,82 +54,70 @@ export function GlobeView({ selectedShip }) {
       })()
     : [];
 
-  // Get port markers with enhanced styling
-  const portMarkers = selectedShip 
-    ? getRouteCoordinates(selectedShip).map((coord, index) => {
-      const isOrigin = index === 0;
-      const isDestination = index === getRouteCoordinates(selectedShip).length - 1;
-      
-      return {
-        lat: coord.lat,
-        lon: coord.lon,
-        size: isOrigin || isDestination ? 2.0 : 0.5,
-        color: isOrigin ? '#10b981' : isDestination ? '#ef4444' : '#6b7280',
-        label: coord.name,
-        isOrigin,
-        isDestination,
-        id: `port-${index}`
-      };
-    })
+  // Get all unique ports from all routes for labeling
+  const allPorts = selectedShip 
+    ? (() => {
+        const route = getRouteCoordinates(selectedShip);
+        const uniquePorts = new Set();
+        const portData = [];
+        
+        // Add origin and destination with labels
+        if (route.length > 0) {
+          // Origin
+          const origin = route[0];
+          if (!uniquePorts.has(`${origin.lat},${origin.lon}`)) {
+            uniquePorts.add(`${origin.lat},${origin.lon}`);
+            portData.push({
+              lat: origin.lat,
+              lon: origin.lon,
+              size: 1.5,
+              color: '#10b981',
+              label: origin.name,
+              isPort: true,
+              isOrigin: true
+            });
+          }
+          
+          // Destination
+          const destination = route[route.length - 1];
+          if (!uniquePorts.has(`${destination.lat},${destination.lon}`)) {
+            uniquePorts.add(`${destination.lat},${destination.lon}`);
+            portData.push({
+              lat: destination.lat,
+              lon: destination.lon,
+              size: 1.5,
+              color: '#ef4444',
+              label: destination.name,
+              isPort: true,
+              isDestination: true
+            });
+          }
+        }
+        
+        return portData;
+      })()
     : [];
 
-  // Port labels as points
-  const portLabels = selectedShip 
-    ? portMarkers.filter(p => p.isOrigin || p.isDestination).map(port => ({
-        lat: port.lat,
-        lon: port.lon,
-        size: 0.1,
-        color: port.color,
-        label: port.isOrigin ? `🚢 ${port.label}` : `🏁 ${port.label}`,
-        isLabel: true
-      }))
-    : [];
-
-  // Ship position marker with trail effect
+  // Ship position markers - flat dots on surface
   const shipMarkers = selectedShip && displayShips.length > 0 
     ? displayShips.map(ship => ({
         ...ship,
-        size: 6,
-        isShip: true
+        size: 2,
+        isShip: true,
+        color: ship.color
       }))
     : [];
 
-  // Ship trail (recent positions)
-  const shipTrail = selectedShip && displayShips.length > 0
-    ? Array.from({ length: 5 }, (_, i) => {
-        const ship = displayShips[0];
-        const progress = (i + 1) * 0.02; // Small trail behind ship
-        return {
-          lat: ship.lat - progress * 0.1,
-          lon: ship.lon - progress * 0.1,
-          size: 1.5 - i * 0.2,
-          color: ship.color,
-          opacity: 0.3 - i * 0.05,
-          isTrail: true
-        };
-      })
-    : [];
-
-  // Combined all markers for single rendering
-  const allMarkers = selectedShip 
-    ? [
-        ...portMarkers,
-        ...portLabels,
-        ...shipTrail,
-        ...shipMarkers
-      ]
-    : [];
-
-  // Pulsing rings for origin/destination ports
-  const portRings = selectedShip 
-    ? portMarkers.filter(p => p.isOrigin || p.isDestination).map(port => ({
-      lat: port.lat,
-      lng: port.lon,
-      color: port.color,
-      maxRadius: 3,
-      propagationSpeed: 1.5,
-      repeatPeriod: 2000
-    }))
+  // Sonar pulse rings for ships
+  const shipRings = selectedShip && displayShips.length > 0
+    ? displayShips.map(ship => ({
+        lat: ship.lat,
+        lng: ship.lon,
+        color: ship.color,
+        maxRadius: 2,
+        propagationSpeed: 1,
+        repeatPeriod: 3000
+      }))
     : [];
 
   // Update ship progress
@@ -167,51 +155,87 @@ export function GlobeView({ selectedShip }) {
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
         backgroundColor="#0a0f1e"
         atmosphereColor="#1a6eff"
-        atmosphereAltitude={0.15}
+        atmosphereAltitude={0.25}
         
-        // Fixed route lines using correct API
+        // Route arcs with proper altitude and animation
         arcsData={routeArcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
         arcEndLat="endLat"
         arcEndLng="endLng"
-        arcColor="color"
-        arcStroke={2}
-        arcAltitude={0.01}
-        arcDashLength={0}
-        arcDashGap={0}
-        arcDashAnimateTime={0}
+        arcColor={() => ['#ffffff', '#ffffff']}
+        arcStroke={1.5}
+        arcAltitude={0.08}
+        arcDashLength={0.4}
+        arcDashGap={0.3}
+        arcDashAnimateTime={1500}
         
-        // All markers in single pointsData call
-        pointsData={allMarkers}
+        // Port markers
+        pointsData={allPorts}
         pointLat="lat"
         pointLng="lon"
         pointColor="color"
         pointRadius="size"
-        pointAltitude={d => d.isShip ? 0.2 : 0.02}
-        pointOpacity={d => d.opacity || 1}
+        pointAltitude={0.01}
+        pointLabel="label"
+        pointLabelSize={12}
+        pointLabelColor="#ffffff"
+        pointLabelResolution={2}
+        pointLabelAltitude={0.02}
         
-        // Pulsing rings for ports
-        ringsData={portRings}
+        // Ship markers
+        pointsMerge={false}
+        pointsData={shipMarkers}
+        pointLat="lat"
+        pointLng="lon"
+        pointColor="color"
+        pointRadius="size"
+        pointAltitude={0.0}
+        pointOpacity={1}
+        
+        // Sonar rings for ships
+        ringsData={shipRings}
         ringLat="lat"
-        ringLng="lon"
+        ringLng="lng"
         ringColor="color"
         ringMaxRadius="maxRadius"
         ringPropagationSpeed="propagationSpeed"
         ringRepeatPeriod="repeatPeriod"
+        ringResolution={64}
       />
       
       {/* Ship progress indicator */}
       {selectedShip && (
-        <div className="absolute bottom-4 left-4 bg-navy/90 border border-white/20 rounded-lg p-3 font-mono text-xs">
-          <div className="text-white font-bold mb-2">Route Progress</div>
-          <div className="w-48 bg-gray-700 rounded-full h-2 mb-2">
+        <div style={{
+          position: 'absolute',
+          bottom: '16px',
+          left: '16px',
+          backgroundColor: 'rgba(10, 15, 30, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '8px',
+          padding: '12px',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '12px'
+        }}>
+          <div style={{ color: 'white', fontWeight: 'bold', marginBottom: '8px' }}>Route Progress</div>
+          <div style={{ 
+            width: '192px', 
+            backgroundColor: '#374151', 
+            borderRadius: '4px', 
+            height: '8px', 
+            marginBottom: '8px' 
+          }}>
             <div 
-              className="bg-blue-500 h-2 rounded-full transition-all duration-1000"
-              style={{ width: `${shipProgress * 100}%` }}
+              style={{
+                backgroundColor: '#3b82f6',
+                height: '8px',
+                borderRadius: '4px',
+                transition: 'all 1s ease',
+                width: `${shipProgress * 100}%`
+              }}
             />
           </div>
-          <div className="text-gray-400">
+          <div style={{ color: '#9ca3af' }}>
             {Math.round(shipProgress * 100)}% complete
           </div>
         </div>
