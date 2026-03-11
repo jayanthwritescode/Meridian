@@ -10,21 +10,30 @@ function App() {
       width: '100vw', 
       height: '100vh', 
       backgroundColor: '#0a0f1e',
-      display: 'flex',
+      position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Main Globe Area */}
+      {/* Globe takes full viewport */}
       <div style={{ 
-        flex: 1, 
-        position: 'relative'
+        width: '100%', 
+        height: '100%', 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        zIndex: 1
       }}>
         <GlobeView selectedShip={selectedShip} />
       </div>
       
-      {/* Right Sidebar */}
+      {/* Permanent Fleet Panel - Overlays on top */}
       <div style={{ 
-        width: '384px', 
-        flexShrink: 0
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        width: '384px',
+        height: '100vh',
+        zIndex: 1000,
+        pointerEvents: 'auto'
       }}>
         <ShipSelector 
           selectedShip={selectedShip} 
