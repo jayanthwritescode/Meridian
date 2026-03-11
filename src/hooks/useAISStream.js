@@ -8,85 +8,85 @@ export function useAISStream(mmsiList) {
   const reconnectTimeoutRef = useRef(null);
   const reconnectAttempts = useRef(0);
 
-  const connect = () => {
-    try {
-      setConnectionStatus('connecting');
-      socketRef.current = new WebSocket('wss://stream.aisstream.io/v0/stream');
+  useEffect(() => {
+    const connect = () => {
+      try {
+        setConnectionStatus('connecting');
+        socketRef.current = new WebSocket('wss://stream.aisstream.io/v0/stream');
 
-      socketRef.current.onopen = () => {
-        console.log('AIS WebSocket connected');
-        setConnectionStatus('live');
-        reconnectAttempts.current = 0;
+        socketRef.current.onopen = () => {
+          console.log('AIS WebSocket connected');
+          setConnectionStatus('live');
+          reconnectAttempts.current = 0;
 
-        const message = {
-          Apikey: import.meta.env.VITE_AISSTREAM_KEY || 'demo',
-          BoundingBoxes: [[[-90, -180], [90, 180]]],
-          FiltersShipMMSI: mmsiList,
-          FilterMessageTypes: ['PositionReport']
+          const message = {
+            Apikey: import.meta.env.VITE_AISSTREAM_KEY || 'demo',
+            BoundingBoxes: [[[-90, -180], [90, 180]]],
+            FiltersShipMMSI: mmsiList,
+            FilterMessageTypes: ['PositionReport']
+          };
+
+          socketRef.current.send(JSON.stringify(message));
         };
 
-        socketRef.current.send(JSON.stringify(message));
-      };
-
-      socketRef.current.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.MessageType === 'PositionReport') {
-            const { MetaData, PositionReport } = data;
-            const mmsi = MetaData.MMSI;
+        socketRef.current.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
             
-            if (mmsiList.includes(mmsi.toString())) {
-              const newPosition = {
-                lat: PositionReport.Latitude,
-                lon: PositionReport.Longitude,
-                speed: PositionReport.Sog,
-                heading: PositionReport.Cog,
-                timestamp: new Date().toISOString()
-              };
+            if (data.MessageType === 'PositionReport') {
+              const { MetaData, PositionReport } = data;
+              const mmsi = MetaData.MMSI;
+              
+              if (mmsiList.includes(mmsi.toString())) {
+                const newPosition = {
+                  lat: PositionReport.Latitude,
+                  lon: PositionReport.Longitude,
+                  speed: PositionReport.Sog,
+                  heading: PositionReport.Cog,
+                  timestamp: new Date().toISOString()
+                };
 
-              setPositions(prev => new Map(prev.set(mmsi, newPosition)));
-              setLastUpdate(new Date());
+                setPositions(prev => new Map(prev.set(mmsi, newPosition)));
+                setLastUpdate(new Date());
+              }
             }
+          } catch (error) {
+            console.error('Error parsing AIS message:', error);
           }
-        } catch (error) {
-          console.error('Error parsing AIS message:', error);
-        }
-      };
+        };
 
-      socketRef.current.onclose = () => {
-        console.log('AIS WebSocket disconnected');
+        socketRef.current.onclose = () => {
+          console.log('AIS WebSocket disconnected');
+          setConnectionStatus('reconnecting');
+          scheduleReconnect();
+        };
+
+        socketRef.current.onerror = (error) => {
+          console.error('AIS WebSocket error:', error);
+          setConnectionStatus('reconnecting');
+        };
+
+      } catch (error) {
+        console.error('Failed to create AIS WebSocket:', error);
         setConnectionStatus('reconnecting');
         scheduleReconnect();
-      };
+      }
+    };
 
-      socketRef.current.onerror = (error) => {
-        console.error('AIS WebSocket error:', error);
-        setConnectionStatus('reconnecting');
-      };
+    const scheduleReconnect = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
 
-    } catch (error) {
-      console.error('Failed to create AIS WebSocket:', error);
-      setConnectionStatus('reconnecting');
-      scheduleReconnect();
-    }
-  };
+      const delays = [5000, 10000, 20000, 30000];
+      const delay = delays[Math.min(reconnectAttempts.current, delays.length - 1)];
+      
+      reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectAttempts.current++;
+        connect();
+      }, delay);
+    };
 
-  const scheduleReconnect = () => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-
-    const delays = [5000, 10000, 20000, 30000];
-    const delay = delays[Math.min(reconnectAttempts.current, delays.length - 1)];
-    
-    reconnectTimeoutRef.current = setTimeout(() => {
-      reconnectAttempts.current++;
-      connect();
-    }, delay);
-  };
-
-  useEffect(() => {
     connect();
 
     return () => {
@@ -97,7 +97,7 @@ export function useAISStream(mmsiList) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, []);
+  }, [mmsiList]);
 
   // Check for stale data
   useEffect(() => {

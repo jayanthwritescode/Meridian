@@ -52,7 +52,7 @@ export function useShipLerp(targetPosition, duration = 5000) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [targetPosition, duration]);
+  }, [targetPosition, currentPosition, duration]);
 
   return currentPosition;
 }
