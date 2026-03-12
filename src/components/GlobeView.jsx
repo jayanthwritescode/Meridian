@@ -9,6 +9,8 @@ export function GlobeView({ selectedRoute, width, height }) {
   const { featuredVessels: featuredData, liveVessels } = useVesselPosition();
   const [shipProgress, setShipProgress] = useState(0);
 
+  console.log('GlobeView rendered with selectedRoute:', selectedRoute);
+
   // Get selected vessel from route
   const selectedVessel = useMemo(() => {
     if (!selectedRoute) return null;
@@ -74,6 +76,7 @@ export function GlobeView({ selectedRoute, width, height }) {
       });
     });
     
+    console.log('allPoints debug:', points);
     return points;
   }, [selectedVessel, liveVesselsPoints]);
 
@@ -120,31 +123,27 @@ export function GlobeView({ selectedRoute, width, height }) {
     return arcs;
   }, [selectedRoute]);
 
-  // Get port labels
+  // Get port labels - simplified approach
   const portLabels = useMemo(() => {
-    const labels = [];
+    const uniquePorts = new Map();
     
     Object.values(SHIP_ROUTES).forEach(route => {
       // Origin port
-      labels.push({
+      uniquePorts.set(route.origin.name, {
+        name: route.origin.name,
         lat: route.origin.lat,
-        lng: route.origin.lon,
-        label: route.origin.name,
-        color: '#64748b',
-        size: 12
+        lon: route.origin.lon
       });
       
       // Destination port
-      labels.push({
+      uniquePorts.set(route.destination.name, {
+        name: route.destination.name,
         lat: route.destination.lat,
-        lng: route.destination.lon,
-        label: route.destination.name,
-        color: '#64748b',
-        size: 12
+        lon: route.destination.lon
       });
     });
     
-    return labels;
+    return Array.from(uniquePorts.values());
   }, []);
 
   // Auto-rotation control
@@ -196,7 +195,7 @@ export function GlobeView({ selectedRoute, width, height }) {
     <div style={{ width: '100%', height: '100%' }}>
       <Globe
         ref={globeEl}
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
+        globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
         backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
         pointsData={allPoints}
         pointLat="lat"
@@ -216,6 +215,7 @@ export function GlobeView({ selectedRoute, width, height }) {
         arcDashGap={selectedRoute ? 0.3 : 0}
         arcDashAnimateTime={selectedRoute ? 1500 : 0}
         arcOpacity="opacity"
+        arcLabel={() => ''}
         ringsData={vesselRings}
         ringLat="lat"
         ringLng="lon"
@@ -224,11 +224,13 @@ export function GlobeView({ selectedRoute, width, height }) {
         ringPropagationSpeed="propagationSpeed"
         ringRepeatPeriod="repeatPeriod"
         labelsData={portLabels}
-        labelLat="lat"
-        labelLng="lng"
-        labelText="label"
-        labelColor="color"
-        labelSize="size"
+        labelLat={d => d.lat}
+        labelLng={d => d.lon}
+        labelText={d => d.name}
+        labelSize={0.5}
+        labelColor={() => 'rgba(255,255,255,0.7)'}
+        labelDotRadius={0.3}
+        labelAltitude={0.01}
         labelResolution={2}
         animateIn={true}
         width={width}

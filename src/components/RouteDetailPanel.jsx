@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Ship } from 'lucide-react';
 import { WAYPOINT_FACTS } from '../data/routes';
+import { SHIPS } from '../data/ships';
 
 export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
   const [scrubberPosition, setScrubberPosition] = useState(0);
@@ -108,6 +109,9 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
   const stats = route.stats || {};
   const waypoints = [route.origin, ...route.waypoints, route.destination];
 
+  // Get ship data for additional info
+  const ship = SHIPS.find(s => s.id === routeId);
+
   return (
     <div 
       ref={panelRef}
@@ -165,7 +169,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             color: '#f1f5f9',
             margin: '0 0 8px 0'
           }}>
-            {vessel.name || 'Unknown Vessel'}
+            {ship?.name || vessel.name || 'Unknown Vessel'}
           </h2>
           
           <div style={{
@@ -182,7 +186,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             color: '#64748b',
             marginBottom: '4px'
           }}>
-            MMSI: {vessel.mmsi || 'Unknown'}
+            MMSI: {ship?.mmsi || vessel.mmsi || 'Unknown'}
           </div>
           
           <div style={{
@@ -190,18 +194,16 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             color: '#94a3b8',
             marginBottom: '8px'
           }}>
-            {vessel.class || 'Container Vessel'}
+            {vessel.class || ship?.description || 'Container Vessel'}
           </div>
           
-          {vessel.teu && (
-            <div style={{
-              fontSize: '12px',
-              color: '#94a3b8',
-              marginBottom: '4px'
-            }}>
-              Cargo: {vessel.cargo || 'Container Goods'} • {vessel.teu}
-            </div>
-          )}
+          <div style={{
+            fontSize: '12px',
+            color: '#94a3b8',
+            marginBottom: '4px'
+          }}>
+            Cargo: {vessel.cargo || 'Container Goods'} • {vessel.teu || ship?.description?.includes('TEU') ? ship.description.match(/[\d,]+ TEU/)?.[0] : 'Unknown'}
+          </div>
         </div>
 
         {/* Column 2 - Voyage Stats & Scrubber */}
@@ -220,7 +222,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 fontFamily: 'JetBrains Mono, monospace',
                 marginBottom: '4px'
               }}>
-                {stats.distance?.toLocaleString() || '0'}
+                {stats.distance?.toLocaleString() || route.stats?.distance?.toLocaleString() || '0'}
               </div>
               <div style={{
                 fontSize: '10px',
@@ -241,7 +243,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 fontFamily: 'JetBrains Mono, monospace',
                 marginBottom: '4px'
               }}>
-                {stats.duration || '0d'}
+                {stats.duration || route.stats?.duration || '0d'}
               </div>
               <div style={{
                 fontSize: '10px',
@@ -262,7 +264,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 fontFamily: 'JetBrains Mono, monospace',
                 marginBottom: '4px'
               }}>
-                {stats.co2?.toLocaleString() || '0'}
+                {stats.co2?.toLocaleString() || route.stats?.co2?.toLocaleString() || '0'}
               </div>
               <div style={{
                 fontSize: '10px',
@@ -327,7 +329,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 top: 0,
                 height: '100%',
                 width: `${scrubberPosition * 100}%`,
-                backgroundColor: vessel.color || '#3b82f6',
+                backgroundColor: ship?.color || vessel.color || '#3b82f6',
                 borderRadius: '999px'
               }} />
               
@@ -366,13 +368,13 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  backgroundColor: vessel.color || '#3b82f6',
+                  backgroundColor: ship?.color || vessel.color || '#3b82f6',
                   marginBottom: '4px'
                 }} />
                 <div style={{
                   fontSize: '10px',
                   fontFamily: 'JetBrains Mono, monospace',
-                  color: vessel.color || '#3b82f6'
+                  color: ship?.color || vessel.color || '#3b82f6'
                 }}>
                   NOW
                 </div>
@@ -388,7 +390,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                   width: '14px',
                   height: '14px',
                   backgroundColor: '#ffffff',
-                  border: `1px solid ${vessel.color || '#3b82f6'}`,
+                  border: `1px solid ${ship?.color || vessel.color || '#3b82f6'}`,
                   borderRadius: '50%',
                   cursor: 'grab'
                 }}
@@ -455,7 +457,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                         top: '8px',
                         width: '2px',
                         height: '32px',
-                        backgroundColor: isActive ? (vessel.color || '#3b82f6') : 'rgba(255,255,255,0.1)'
+                        backgroundColor: isActive ? (ship?.color || vessel.color || '#3b82f6') : 'rgba(255,255,255,0.1)'
                       }}
                     />
                   )}
@@ -469,7 +471,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                       width: '12px',
                       height: '12px',
                       borderRadius: '50%',
-                      backgroundColor: isCurrent ? (vessel.color || '#3b82f6') : isActive ? (vessel.color || '#3b82f6') : 'rgba(255,255,255,0.2)',
+                      backgroundColor: isCurrent ? (ship?.color || vessel.color || '#3b82f6') : isActive ? (ship?.color || vessel.color || '#3b82f6') : 'rgba(255,255,255,0.2)',
                       border: isCurrent ? '2px solid #ffffff' : 'none'
                     }}
                   >
