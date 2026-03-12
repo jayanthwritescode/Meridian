@@ -105,6 +105,10 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
 
   if (!route) return null;
 
+  // Log the full route object for debugging
+  console.log('RouteDetailPanel received route:', route);
+  console.log('RouteDetailPanel received routeId:', routeId);
+
   const vessel = route.vessel || {};
   const stats = route.stats || {};
   const waypoints = [route.origin, ...route.waypoints, route.destination];
@@ -177,7 +181,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             color: '#94a3b8',
             marginBottom: '4px'
           }}>
-            {vessel.carrier || 'Unknown Carrier'}
+            {route.vessel?.carrier || 'Unknown Carrier'}
           </div>
           
           <div style={{
@@ -186,7 +190,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             color: '#64748b',
             marginBottom: '4px'
           }}>
-            MMSI: {ship?.mmsi || vessel.mmsi || 'Unknown'}
+            MMSI: {route.vessel?.mmsi || ship?.mmsi || 'Unknown'}
           </div>
           
           <div style={{
@@ -194,7 +198,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             color: '#94a3b8',
             marginBottom: '8px'
           }}>
-            {vessel.class || ship?.description || 'Container Vessel'}
+            {route.vessel?.class || ship?.description || 'Container Vessel'}
           </div>
           
           <div style={{
@@ -202,7 +206,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             color: '#94a3b8',
             marginBottom: '4px'
           }}>
-            Cargo: {vessel.cargo || 'Container Goods'} • {vessel.teu || ship?.description?.includes('TEU') ? ship.description.match(/[\d,]+ TEU/)?.[0] : 'Unknown'}
+            Cargo: {route.vessel?.cargo || 'Container Goods'} • {route.vessel?.teu || ship?.description?.includes('TEU') ? ship.description.match(/[\d,]+ TEU/)?.[0] : 'Unknown'}
           </div>
         </div>
 
@@ -222,7 +226,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 fontFamily: 'JetBrains Mono, monospace',
                 marginBottom: '4px'
               }}>
-                {stats.distance?.toLocaleString() || route.stats?.distance?.toLocaleString() || '0'}
+                {route.stats?.distance?.toLocaleString() || '0'}
               </div>
               <div style={{
                 fontSize: '10px',
@@ -243,7 +247,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 fontFamily: 'JetBrains Mono, monospace',
                 marginBottom: '4px'
               }}>
-                {stats.duration || route.stats?.duration || '0d'}
+                {route.stats?.duration ? `${route.stats.duration}d` : '0d'}
               </div>
               <div style={{
                 fontSize: '10px',
@@ -264,7 +268,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 fontFamily: 'JetBrains Mono, monospace',
                 marginBottom: '4px'
               }}>
-                {stats.co2?.toLocaleString() || route.stats?.co2?.toLocaleString() || '0'}
+                {route.stats?.co2 || '0'}
               </div>
               <div style={{
                 fontSize: '10px',

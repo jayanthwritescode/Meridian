@@ -58,7 +58,7 @@ export function GlobeView({ selectedRoute, width, height }) {
       points.push({
         lat: selectedVessel.lat,
         lon: selectedVessel.lon,
-        size: 6,
+        size: 0.5,
         color: selectedVessel.color || '#3b82f6',
         altitude: 0.01,
         isFeatured: true
@@ -70,7 +70,7 @@ export function GlobeView({ selectedRoute, width, height }) {
       points.push({
         lat: vessel.lat,
         lon: vessel.lon,
-        size: 1,
+        size: 0.3,
         color: 'rgba(255,255,255,0.3)',
         altitude: 0.005
       });
@@ -210,10 +210,10 @@ export function GlobeView({ selectedRoute, width, height }) {
         arcEndLat="endLat"
         arcEndLng="endLng"
         arcColor="color"
-        arcStroke="stroke"
-        arcDashLength={selectedRoute ? 0.5 : 0}
-        arcDashGap={selectedRoute ? 0.3 : 0}
-        arcDashAnimateTime={selectedRoute ? 1500 : 0}
+        arcStroke={0.5}
+        arcDashLength={0.4}
+        arcDashGap={0.15}
+        arcDashAnimateTime={4000}
         arcOpacity="opacity"
         arcLabel={() => ''}
         ringsData={vesselRings}
