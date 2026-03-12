@@ -40,10 +40,11 @@ function App() {
 
   const handleRouteSelect = (routeId) => {
     setSelectedRoute(routeId);
-    // Close mobile menu after selection
-    if (isMobile) {
-      setShowMobileMenu(false);
-    }
+  };
+
+  const handleShipPositionChange = (position) => {
+    // This will be used to update the globe with the scrubber position
+    console.log('Ship position changed:', position);
   };
 
   const handleMobileMenuToggle = () => {
@@ -212,6 +213,7 @@ function App() {
             routeId={selectedRoute}
             onClose={() => setSelectedRoute(null)}
             isMobile={isMobile}
+            onShipPositionChange={handleShipPositionChange}
           />
         )}
       </div>

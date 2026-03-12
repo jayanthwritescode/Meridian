@@ -2,20 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Ship } from 'lucide-react';
 import { WAYPOINT_FACTS } from '../data/routes';
 import { SHIPS } from '../data/ships';
+import { VoyageScrubber } from './VoyageScrubber';
 
-export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
-  const [scrubberPosition, setScrubberPosition] = useState(0);
+export function RouteDetailPanel({ route, routeId, onClose, isMobile, onShipPositionChange }) {
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const scrubberRef = useRef(null);
   const panelRef = useRef(null);
-
-  // Calculate current position based on computed position engine
-  useEffect(() => {
-    // This would integrate with the computed position engine
-    // For now, set to 50% as demo
-    setScrubberPosition(0.5);
-  }, [routeId]);
 
   // Auto-cycle facts
   useEffect(() => {
@@ -35,35 +26,6 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
 
     return () => clearInterval(interval);
   }, [route]);
-
-  const handleScrubberDrag = (e) => {
-    if (!isDragging || !scrubberRef.current) return;
-    
-    const rect = scrubberRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = Math.max(0, Math.min(1, x / rect.width));
-    setScrubberPosition(percentage);
-  };
-
-  const handleMouseDown = () => {
-    setIsDragging(true);
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleScrubberDrag);
-      document.addEventListener('mouseup', handleMouseUp);
-      
-      return () => {
-        document.removeEventListener('mousemove', handleScrubberDrag);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging]);
 
   const handleFactPrev = () => {
     setCurrentFactIndex((prev) => {
@@ -97,10 +59,6 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
     });
     
     return allFacts[currentFactIndex] || '';
-  };
-
-  const resetToNow = () => {
-    setScrubberPosition(0.5); // Reset to current position
   };
 
   if (!route) return null;
@@ -289,7 +247,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
                 fontFamily: 'JetBrains Mono, monospace',
                 marginBottom: '4px'
               }}>
-                {Math.round(scrubberPosition * 100)}%
+                50%
               </div>
               <div style={{
                 fontSize: '10px',
@@ -302,123 +260,136 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
               </div>
             </div>
           </div>
-          
-          {/* Voyage Scrubber */}
+        </div>
+        
+        <div style={{
+          fontSize: '12px',
+          color: '#94a3b8',
+          marginBottom: '8px'
+        }}>
+          {route.vessel?.class || ship?.description || 'Container Vessel'}
+        </div>
+        
+        <div style={{
+          fontSize: '12px',
+          color: '#94a3b8',
+          marginBottom: '4px'
+        }}>
+          Cargo: {route.vessel?.cargo || 'Container Goods'} • {route.vessel?.teu || ship?.description?.includes('TEU') ? ship.description.match(/[\d,]+ TEU/)?.[0] : 'Unknown'}
+        </div>
+      </div>
+
+      {/* Column 2 - Voyage Stats & Scrubber */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
           <div>
             <div style={{
-              fontSize: '12px',
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#ffffff',
               fontFamily: 'JetBrains Mono, monospace',
-              color: '#64748b',
-              marginBottom: '8px'
+              marginBottom: '4px'
             }}>
-              VOYAGE PROGRESS
+              {route.stats?.distance?.toLocaleString() || '0'}
             </div>
-            
-            <div
-              ref={scrubberRef}
-              style={{
-                position: 'relative',
-                height: '3px',
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                borderRadius: '999px',
-                marginBottom: '8px',
-                cursor: 'pointer'
-              }}
-              onMouseDown={handleMouseDown}
-            >
-              {/* Filled portion */}
-              <div style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                height: '100%',
-                width: `${scrubberPosition * 100}%`,
-                backgroundColor: ship?.color || vessel.color || '#3b82f6',
-                borderRadius: '999px'
-              }} />
-              
-              {/* Waypoint ticks */}
-              {waypoints.map((waypoint, index) => {
-                const position = index / (waypoints.length - 1);
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      position: 'absolute',
-                      left: `${position * 100}%`,
-                      top: '-2px',
-                      width: '4px',
-                      height: '7px',
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                      borderRadius: '1px'
-                    }}
-                  />
-                );
-              })}
-              
-              {/* NOW marker */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: `${scrubberPosition * 100}%`,
-                  top: '-8px',
-                  transform: 'translateX(-50%)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center'
-                }}
-              >
-                <div style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: ship?.color || vessel.color || '#3b82f6',
-                  marginBottom: '4px'
-                }} />
-                <div style={{
-                  fontSize: '10px',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  color: ship?.color || vessel.color || '#3b82f6'
-                }}>
-                  NOW
-                </div>
-              </div>
-              
-              {/* Thumb */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: `${scrubberPosition * 100}%`,
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '14px',
-                  height: '14px',
-                  backgroundColor: '#ffffff',
-                  border: `1px solid ${ship?.color || vessel.color || '#3b82f6'}`,
-                  borderRadius: '50%',
-                  cursor: 'grab'
-                }}
-              />
+            <div style={{
+              fontSize: '10px',
+              fontFamily: 'JetBrains Mono, monospace',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: '#64748b'
+            }}>
+              DISTANCE (KM)
             </div>
-            
-            {/* Reset button */}
-            {Math.abs(scrubberPosition - 0.5) > 0.01 && (
-              <button
-                onClick={resetToNow}
-                style={{
-                  fontSize: '11px',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  color: '#64748b',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textDecoration: 'underline'
-                }}
-              >
-                RESET TO NOW
-              </button>
-            )}
           </div>
+          
+          <div>
+            <div style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#ffffff',
+              fontFamily: 'JetBrains Mono, monospace',
+              marginBottom: '4px'
+            }}>
+              {route.stats?.duration ? `${route.stats.duration}d` : '0d'}
+            </div>
+            <div style={{
+              fontSize: '10px',
+              fontFamily: 'JetBrains Mono, monospace',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: '#64748b'
+            }}>
+              DURATION
+            </div>
+          </div>
+          
+          <div>
+            <div style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#ffffff',
+              fontFamily: 'JetBrains Mono, monospace',
+              marginBottom: '4px'
+            }}>
+              {route.stats?.co2 || '0'}
+            </div>
+            <div style={{
+              fontSize: '10px',
+              fontFamily: 'JetBrains Mono, monospace',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: '#64748b'
+            }}>
+              CO₂ (TONNES)
+            </div>
+          </div>
+          
+          <div>
+            <div style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#ffffff',
+              fontFamily: 'JetBrains Mono, monospace',
+              marginBottom: '4px'
+            }}>
+              50%
+            </div>
+            <div style={{
+              fontSize: '10px',
+              fontFamily: 'JetBrains Mono, monospace',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: '#64748b'
+            }}>
+              PROGRESS
+            </div>
+          </div>
+        </div>
+        
+        {/* Voyage Scrubber */}
+        <div>
+          <div style={{
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#f1f5f9',
+            marginBottom: '16px',
+            fontFamily: 'Syne, sans-serif'
+          }}>
+            VOYAGE PROGRESS
+          </div>
+          
+          <VoyageScrubber 
+            route={route} 
+            routeId={routeId} 
+            ship={ship}
+            onPositionChange={onShipPositionChange}
+          />
         </div>
 
         {/* Column 3 - Journey Timeline & Facts */}
@@ -440,8 +411,8 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile }) {
             marginBottom: '24px'
           }}>
             {waypoints.map((waypoint, index) => {
-              const isActive = index / (waypoints.length - 1) <= scrubberPosition;
-              const isCurrent = Math.abs(index / (waypoints.length - 1) - scrubberPosition) < 0.1;
+              const isActive = index / (waypoints.length - 1) <= 0.5; // Default to middle
+              const isCurrent = Math.abs(index / (waypoints.length - 1) - 0.5) < 0.1;
               
               return (
                 <div

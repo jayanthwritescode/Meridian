@@ -13,11 +13,11 @@ export const SHIP_ROUTES = {
       country: 'Netherlands'
     },
     waypoints: [
-      { name: 'Taiwan Strait', lat: 24.5, lon: 121.0 },
-      { name: 'Strait of Malacca', lat: 1.3, lon: 103.8 },
-      { name: 'Indian Ocean', lat: -5.0, lon: 72.0 },
-      { name: 'Suez Canal', lat: 30.0, lon: 32.5 },
-      { name: 'Mediterranean', lat: 36.0, lon: 14.0 }
+      { name: 'Taiwan Strait', lat: 24.5, lon: 121.0, legName: 'East China Sea' },
+      { name: 'Strait of Malacca', lat: 1.3, lon: 103.8, legName: 'South China Sea' },
+      { name: 'Indian Ocean', lat: -5.0, lon: 72.0, legName: 'Bay of Bengal' },
+      { name: 'Suez Canal', lat: 30.0, lon: 32.5, legName: 'Indian Ocean' },
+      { name: 'Mediterranean', lat: 36.0, lon: 14.0, legName: 'Red Sea' }
     ]
   },
   'EVERAPEX': {
@@ -34,9 +34,9 @@ export const SHIP_ROUTES = {
       country: 'Japan'
     },
     waypoints: [
-      { name: 'Pacific Crossing', lat: 35.0, lon: -140.0 },
-      { name: 'Mid-Pacific', lat: 30.0, lon: -170.0 },
-      { name: 'Approach Japan', lat: 35.0, lon: 140.0 }
+      { name: 'Pacific Crossing', lat: 35.0, lon: -140.0, legName: 'North Pacific Ocean' },
+      { name: 'Mid Pacific', lat: 25.0, lon: -170.0, legName: 'North Pacific Ocean' },
+      { name: 'Japan Approach', lat: 32.0, lon: 135.0, legName: 'Philippine Sea' }
     ]
   },
   'COSCOFORTUNE': {
@@ -53,11 +53,11 @@ export const SHIP_ROUTES = {
       country: 'Belgium'
     },
     waypoints: [
-      { name: 'South Atlantic', lat: -15.0, lon: -30.0 },
-      { name: 'Equator Crossing', lat: 0.0, lon: -20.0 },
-      { name: 'North Atlantic', lat: 25.0, lon: -30.0 },
-      { name: 'European Approach', lat: 45.0, lon: -10.0 },
-      { name: 'English Channel', lat: 50.0, lon: 2.0 }
+      { name: 'South Atlantic', lat: -15.0, lon: -30.0, legName: 'South Atlantic Ocean' },
+      { name: 'Equator Crossing', lat: 0.0, lon: -20.0, legName: 'South Atlantic Ocean' },
+      { name: 'North Atlantic', lat: 25.0, lon: -30.0, legName: 'North Atlantic Ocean' },
+      { name: 'European Approach', lat: 45.0, lon: -10.0, legName: 'Bay of Biscay' },
+      { name: 'English Channel', lat: 50.0, lon: 2.0, legName: 'English Channel' }
     ]
   },
   'MSCELBE': {
@@ -74,10 +74,10 @@ export const SHIP_ROUTES = {
       country: 'USA'
     },
     waypoints: [
-      { name: 'English Channel', lat: 50.5, lon: 1.5 },
-      { name: 'Bay of Biscay', lat: 45.0, lon: -10.0 },
-      { name: 'Mid Atlantic', lat: 40.0, lon: -30.0 },
-      { name: 'Georges Bank', lat: 41.0, lon: -66.0 }
+      { name: 'English Channel', lat: 50.5, lon: 1.5, legName: 'English Channel' },
+      { name: 'Bay of Biscay', lat: 45.0, lon: -10.0, legName: 'Bay of Biscay' },
+      { name: 'Mid Atlantic', lat: 40.0, lon: -30.0, legName: 'North Atlantic Ocean' },
+      { name: 'Georges Bank', lat: 41.0, lon: -66.0, legName: 'North Atlantic Ocean' }
     ],
     vessel: {
       name: 'MSC Elbe',
@@ -112,9 +112,9 @@ export const SHIP_ROUTES = {
       country: 'India'
     },
     waypoints: [
-      { name: 'Strait of Hormuz', lat: 26.5, lon: 56.8 },
-      { name: 'Gulf of Oman', lat: 23.0, lon: 60.0 },
-      { name: 'Arabian Sea', lat: 20.0, lon: 65.0 }
+      { name: 'Strait of Hormuz', lat: 26.5, lon: 56.8, legName: 'Strait of Hormuz' },
+      { name: 'Gulf of Oman', lat: 23.0, lon: 60.0, legName: 'Gulf of Oman' },
+      { name: 'Arabian Sea', lat: 20.0, lon: 65.0, legName: 'Arabian Sea' }
     ],
     vessel: {
       name: 'OOCL Arabia',
@@ -149,11 +149,11 @@ export const SHIP_ROUTES = {
       country: 'Nigeria'
     },
     waypoints: [
-      { name: 'South China Sea', lat: 15.0, lon: 112.0 },
-      { name: 'Strait of Malacca', lat: 1.3, lon: 103.8 },
-      { name: 'Indian Ocean', lat: -10.0, lon: 75.0 },
-      { name: 'Cape of Good Hope', lat: -34.5, lon: 19.9 },
-      { name: 'Gulf of Guinea', lat: 3.0, lon: 5.0 }
+      { name: 'South China Sea', lat: 15.0, lon: 112.0, legName: 'South China Sea' },
+      { name: 'Strait of Malacca', lat: 1.3, lon: 103.8, legName: 'Strait of Malacca' },
+      { name: 'Indian Ocean', lat: -10.0, lon: 75.0, legName: 'Indian Ocean' },
+      { name: 'Cape of Good Hope', lat: -34.5, lon: 19.9, legName: 'South Atlantic Ocean' },
+      { name: 'Gulf of Guinea', lat: 3.0, lon: 5.0, legName: 'Gulf of Guinea' }
     ],
     vessel: {
       name: 'COSCO Africa',
@@ -188,10 +188,10 @@ export const SHIP_ROUTES = {
       country: 'Canada'
     },
     waypoints: [
-      { name: 'North Pacific', lat: 40.0, lon: 160.0 },
-      { name: 'Aleutian Arc', lat: 48.0, lon: -175.0 },
-      { name: 'Gulf of Alaska', lat: 50.0, lon: -145.0 },
-      { name: 'Pacific Northwest', lat: 48.0, lon: -130.0 }
+      { name: 'North Pacific', lat: 40.0, lon: 160.0, legName: 'North Pacific Ocean' },
+      { name: 'Aleutian Arc', lat: 48.0, lon: -175.0, legName: 'North Pacific Ocean' },
+      { name: 'Gulf of Alaska', lat: 50.0, lon: -145.0, legName: 'Gulf of Alaska' },
+      { name: 'Pacific Northwest', lat: 48.0, lon: -130.0, legName: 'Pacific Northwest' }
     ],
     vessel: {
       name: 'Ever Globe',
@@ -226,9 +226,9 @@ export const SHIP_ROUTES = {
       country: 'Australia'
     },
     waypoints: [
-      { name: 'Java Sea', lat: -5.0, lon: 110.0 },
-      { name: 'Timor Sea', lat: -10.0, lon: 127.0 },
-      { name: 'Coral Sea', lat: -20.0, lon: 150.0 }
+      { name: 'Java Sea', lat: -5.0, lon: 110.0, legName: 'Java Sea' },
+      { name: 'Timor Sea', lat: -10.0, lon: 127.0, legName: 'Timor Sea' },
+      { name: 'Coral Sea', lat: -20.0, lon: 150.0, legName: 'Coral Sea' }
     ],
     vessel: {
       name: 'ANL Bindaree',
