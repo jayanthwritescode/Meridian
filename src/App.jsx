@@ -1,26 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { GlobeView } from './components/GlobeView';
-import { ShipSelector } from './components/ShipSelector';
-import { TestExplorer } from './components/TestExplorer';
+import { RouteSidebar } from './components/RouteSidebar';
+import { RouteDetailPanel } from './components/RouteDetailPanel';
 import { Menu } from 'lucide-react';
+import { SHIP_ROUTES } from './data/routes';
 
 function App() {
-  const [selectedShip, setSelectedShip] = useState('');
+  const [selectedRoute, setSelectedRoute] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [globeDimensions, setGlobeDimensions] = useState({ width: 0, height: 0 });
-  const [viewMode, setViewMode] = useState('explorer'); // 'explorer' or 'live' - explorer is now default
   const globeContainerRef = useRef(null);
 
-  // Debug logging
-  console.log('App render debug:', {
-    selectedShip,
-    viewMode,
-    isMobile,
-    showMobileMenu
-  });
-
-  // Handle responsive layout
+  // Check mobile width
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -31,31 +23,31 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // ResizeObserver for globe dimensions
+  // Handle globe container resize
   useEffect(() => {
-    if (!globeContainerRef.current) return;
-
     const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setGlobeDimensions({ width, height });
-      }
+      const entry = entries[0];
+      const { width, height } = entry.contentRect;
+      setGlobeDimensions({ width, height });
     });
 
-    resizeObserver.observe(globeContainerRef.current);
+    if (globeContainerRef.current) {
+      resizeObserver.observe(globeContainerRef.current);
+    }
+    
     return () => resizeObserver.disconnect();
   }, []);
 
-  const handleMobileMenuToggle = () => {
-    setShowMobileMenu(!showMobileMenu);
-  };
-
-  const handleShipSelect = (shipId) => {
-    setSelectedShip(shipId);
+  const handleRouteSelect = (routeId) => {
+    setSelectedRoute(routeId);
     // Close mobile menu after selection
     if (isMobile) {
       setShowMobileMenu(false);
     }
+  };
+
+  const handleMobileMenuToggle = () => {
+    setShowMobileMenu(!showMobileMenu);
   };
 
   return (
@@ -66,250 +58,71 @@ function App() {
       overflow: 'hidden',
       position: 'relative'
     }}>
-      {/* Mobile Header */}
-      {isMobile && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: '56px',
-          backgroundColor: '#0a0f1e',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 16px',
-          zIndex: 40,
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button
-              onClick={handleMobileMenuToggle}
-              style={{
-                width: '32px',
-                height: '32px',
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid rgba(255,255,255,0.07)',
-                cursor: 'pointer'
-              }}
-            >
-              <Menu size="16" strokeWidth="1.5" style={{ color: '#f1f5f9' }} />
-            </button>
-            <div>
-              <h1 style={{
-                color: '#f1f5f9',
-                fontWeight: '600',
-                fontSize: '16px',
-                fontFamily: 'Syne, sans-serif',
-                letterSpacing: '0.02em',
-                margin: 0
-              }}>Meridian</h1>
-              <div style={{
-                fontSize: '12px',
-                color: '#64748b',
-                fontFamily: 'Syne, sans-serif',
-                letterSpacing: '0.01em',
-                marginTop: '2px'
-              }}>
-                Atlas of Global Trade
-              </div>
-            </div>
-            
-            {/* Mode Toggle */}
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              alignItems: 'center',
-              backgroundColor: 'rgba(255,255,255,0.02)',
-              padding: '6px 8px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255,255,255,0.07)',
-              zIndex: 50
-            }}>
-              <button
-                onClick={() => {
-                  console.log('EXPLORE button clicked');
-                  setViewMode('explorer');
-                }}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '11px',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontWeight: '500',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  backgroundColor: viewMode === 'explorer' ? '#f1f5f9' : 'transparent',
-                  color: viewMode === 'explorer' ? '#ffffff' : '#64748b',
-                  border: viewMode === 'explorer' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 200ms ease'
-                }}
-              >
-                EXPLORE
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <button
-                  onClick={() => {
-                    console.log('LIVE button clicked');
-                    setViewMode('live');
-                  }}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    fontWeight: '500',
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    backgroundColor: viewMode === 'live' ? '#f1f5f9' : 'transparent',
-                    color: viewMode === 'live' ? '#ffffff' : '#64748b',
-                    border: viewMode === 'live' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    transition: 'all 200ms ease'
-                  }}
-                >
-                  LIVE
-                </button>
-                <span style={{
-                  fontSize: '10px',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  color: '#64748b',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  padding: '2px 6px',
-                  borderRadius: '3px'
-                }}>
-                  BETA
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Desktop Header */}
-      {!isMobile && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: '56px',
-          backgroundColor: '#0a0f1e',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-          zIndex: 40,
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div>
-              <h1 style={{
-                color: '#f1f5f9',
-                fontWeight: '600',
-                fontSize: '16px',
-                fontFamily: 'Syne, sans-serif',
-                letterSpacing: '0.02em',
-                margin: 0
-              }}>Meridian</h1>
-              <div style={{
-                fontSize: '12px',
-                color: '#64748b',
-                fontFamily: 'Syne, sans-serif',
-                letterSpacing: '0.01em',
-                marginTop: '2px'
-              }}>
-                Atlas of Global Trade
-              </div>
-            </div>
-            
-            {/* Route Stats */}
+      {/* Header */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '56px',
+        backgroundColor: '#0a0f1e',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 24px',
+        zIndex: 40,
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Anchor Icon */}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: '#f1f5f9' }}>
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>
+            <path d="M20.5 7.5L16 12l4.5 4.5M3.5 7.5L8 12l-4.5 4.5"/>
+          </svg>
+          
+          <div>
+            <h1 style={{
+              color: '#f1f5f9',
+              fontWeight: '600',
+              fontSize: '16px',
+              fontFamily: 'Syne, sans-serif',
+              letterSpacing: '0.02em',
+              margin: 0
+            }}>Meridian</h1>
             <div style={{
               fontSize: '12px',
               color: '#64748b',
-              fontFamily: 'JetBrains Mono, monospace'
+              fontFamily: 'Syne, sans-serif',
+              letterSpacing: '0.01em',
+              marginTop: '2px'
             }}>
-              8 routes · 89,320 km charted
-            </div>
-          </div>
-          
-          {/* Mode Toggle */}
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            alignItems: 'center',
-            backgroundColor: 'rgba(255,255,255,0.02)',
-            padding: '6px 8px',
-            borderRadius: '6px',
-            border: '1px solid rgba(255,255,255,0.07)',
-            zIndex: 50
-          }}>
-            <button
-              onClick={() => {
-                console.log('EXPLORE button clicked');
-                setViewMode('explorer');
-              }}
-              style={{
-                padding: '6px 12px',
-                fontSize: '11px',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontWeight: '500',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                backgroundColor: viewMode === 'explorer' ? '#f1f5f9' : 'transparent',
-                color: viewMode === 'explorer' ? '#ffffff' : '#64748b',
-                border: viewMode === 'explorer' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                transition: 'all 200ms ease'
-              }}
-            >
-              EXPLORE
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <button
-                onClick={() => {
-                  console.log('LIVE button clicked');
-                  setViewMode('live');
-                }}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '11px',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontWeight: '500',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  backgroundColor: viewMode === 'live' ? '#f1f5f9' : 'transparent',
-                  color: viewMode === 'live' ? '#ffffff' : '#64748b',
-                  border: viewMode === 'live' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 200ms ease'
-                }}
-              >
-                LIVE
-              </button>
-              <span style={{
-                fontSize: '10px',
-                fontFamily: 'JetBrains Mono, monospace',
-                color: '#64748b',
-                border: '1px solid rgba(255,255,255,0.15)',
-                padding: '2px 6px',
-                borderRadius: '3px'
-              }}>
-                BETA
-              </span>
+              Atlas of Global Trade
             </div>
           </div>
         </div>
-      )}
+        
+        {/* Mobile Menu Button */}
+        {isMobile && (
+          <button
+            onClick={handleMobileMenuToggle}
+            style={{
+              width: '32px',
+              height: '32px',
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid rgba(255,255,255,0.07)',
+              cursor: 'pointer'
+            }}
+          >
+            <Menu size="16" strokeWidth="1.5" style={{ color: '#f1f5f9' }} />
+          </button>
+        )}
+      </div>
 
       {/* Main Layout */}
       <div style={{
@@ -318,46 +131,43 @@ function App() {
         height: '100%',
         position: 'relative'
       }}>
+        {/* Sidebar - Desktop */}
+        {!isMobile && (
+          <div style={{
+            width: '300px',
+            height: 'calc(100vh - 56px)',
+            marginTop: '56px',
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            zIndex: 30
+          }}>
+            <RouteSidebar 
+              selectedRoute={selectedRoute}
+              onRouteSelect={handleRouteSelect}
+              isMobile={false}
+            />
+          </div>
+        )}
+
         {/* Globe Container */}
         <div 
           ref={globeContainerRef}
           style={{
             flex: 1,
-            height: isMobile ? '100vh' : 'calc(100vh - 56px)',
-            marginTop: isMobile ? '56px' : '0',
+            height: 'calc(100vh - 56px)',
+            marginTop: '56px',
+            marginLeft: isMobile ? '0' : '300px',
             position: 'relative',
             overflow: 'hidden'
           }}
         >
-          {viewMode === 'live' ? (
-            <GlobeView 
-              selectedShip={selectedShip} 
-              width={globeDimensions.width}
-              height={globeDimensions.height}
-            />
-          ) : (
-            <TestExplorer />
-          )}
+          <GlobeView 
+            selectedRoute={selectedRoute}
+            width={globeDimensions.width}
+            height={globeDimensions.height}
+          />
         </div>
-
-        {/* Sidebar - Desktop */}
-        {!isMobile && (
-          <div style={{
-            width: '280px',
-            height: 'calc(100vh - 56px)',
-            marginTop: '56px',
-            position: 'fixed',
-            right: 0,
-            top: 0,
-            zIndex: 30
-          }}>
-            <ShipSelector 
-              selectedShip={selectedShip} 
-              onShipSelect={handleShipSelect}
-              isMobile={false}
-            />
-          </div>
-        )}
 
         {/* Mobile Menu Drawer */}
         {isMobile && showMobileMenu && (
@@ -385,14 +195,24 @@ function App() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <ShipSelector 
-                selectedShip={selectedShip} 
-                onShipSelect={handleShipSelect}
+              <RouteSidebar 
+                selectedRoute={selectedRoute}
+                onRouteSelect={handleRouteSelect}
                 isMobile={true}
                 onMobileMenuToggle={handleMobileMenuToggle}
               />
             </div>
           </div>
+        )}
+
+        {/* Route Detail Panel */}
+        {selectedRoute && (
+          <RouteDetailPanel 
+            route={SHIP_ROUTES[selectedRoute]}
+            routeId={selectedRoute}
+            onClose={() => setSelectedRoute(null)}
+            isMobile={isMobile}
+          />
         )}
       </div>
     </div>
