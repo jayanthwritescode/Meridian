@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { GlobeView } from './components/GlobeView';
 import { ShipSelector } from './components/ShipSelector';
+import { TestExplorer } from './components/TestExplorer';
 import { Menu } from 'lucide-react';
 
 function App() {
@@ -8,7 +9,16 @@ function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [globeDimensions, setGlobeDimensions] = useState({ width: 0, height: 0 });
+  const [viewMode, setViewMode] = useState('explorer'); // 'explorer' or 'live' - explorer is now default
   const globeContainerRef = useRef(null);
+
+  // Debug logging
+  console.log('App render debug:', {
+    selectedShip,
+    viewMode,
+    isMobile,
+    showMobileMenu
+  });
 
   // Handle responsive layout
   useEffect(() => {
@@ -99,14 +109,204 @@ function App() {
                 letterSpacing: '0.02em',
                 margin: 0
               }}>Meridian</h1>
+              <div style={{
+                fontSize: '12px',
+                color: '#64748b',
+                fontFamily: 'Syne, sans-serif',
+                letterSpacing: '0.01em',
+                marginTop: '2px'
+              }}>
+                Atlas of Global Trade
+              </div>
+            </div>
+            
+            {/* Mode Toggle */}
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255,255,255,0.02)',
+              padding: '6px 8px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255,255,255,0.07)',
+              zIndex: 50
+            }}>
+              <button
+                onClick={() => {
+                  console.log('EXPLORE button clicked');
+                  setViewMode('explorer');
+                }}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontWeight: '500',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  backgroundColor: viewMode === 'explorer' ? '#f1f5f9' : 'transparent',
+                  color: viewMode === 'explorer' ? '#ffffff' : '#64748b',
+                  border: viewMode === 'explorer' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 200ms ease'
+                }}
+              >
+                EXPLORE
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  onClick={() => {
+                    console.log('LIVE button clicked');
+                    setViewMode('live');
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontWeight: '500',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    backgroundColor: viewMode === 'live' ? '#f1f5f9' : 'transparent',
+                    color: viewMode === 'live' ? '#ffffff' : '#64748b',
+                    border: viewMode === 'live' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 200ms ease'
+                  }}
+                >
+                  LIVE
+                </button>
+                <span style={{
+                  fontSize: '10px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  color: '#64748b',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  padding: '2px 6px',
+                  borderRadius: '3px'
+                }}>
+                  BETA
+                </span>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Desktop Header */}
+      {!isMobile && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '56px',
+          backgroundColor: '#0a0f1e',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 24px',
+          zIndex: 40,
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div>
+              <h1 style={{
+                color: '#f1f5f9',
+                fontWeight: '600',
+                fontSize: '16px',
+                fontFamily: 'Syne, sans-serif',
+                letterSpacing: '0.02em',
+                margin: 0
+              }}>Meridian</h1>
+              <div style={{
+                fontSize: '12px',
+                color: '#64748b',
+                fontFamily: 'Syne, sans-serif',
+                letterSpacing: '0.01em',
+                marginTop: '2px'
+              }}>
+                Atlas of Global Trade
+              </div>
+            </div>
+            
+            {/* Route Stats */}
+            <div style={{
+              fontSize: '12px',
+              color: '#64748b',
+              fontFamily: 'JetBrains Mono, monospace'
+            }}>
+              8 routes · 89,320 km charted
+            </div>
+          </div>
+          
+          {/* Mode Toggle */}
           <div style={{
-            fontSize: '12px',
-            color: '#64748b',
-            fontFamily: 'JetBrains Mono, monospace'
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'center',
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            padding: '6px 8px',
+            borderRadius: '6px',
+            border: '1px solid rgba(255,255,255,0.07)',
+            zIndex: 50
           }}>
-            Live Fleet Tracking
+            <button
+              onClick={() => {
+                console.log('EXPLORE button clicked');
+                setViewMode('explorer');
+              }}
+              style={{
+                padding: '6px 12px',
+                fontSize: '11px',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontWeight: '500',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                backgroundColor: viewMode === 'explorer' ? '#f1f5f9' : 'transparent',
+                color: viewMode === 'explorer' ? '#ffffff' : '#64748b',
+                border: viewMode === 'explorer' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                transition: 'all 200ms ease'
+              }}
+            >
+              EXPLORE
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                onClick={() => {
+                  console.log('LIVE button clicked');
+                  setViewMode('live');
+                }}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontWeight: '500',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  backgroundColor: viewMode === 'live' ? '#f1f5f9' : 'transparent',
+                  color: viewMode === 'live' ? '#ffffff' : '#64748b',
+                  border: viewMode === 'live' ? `2px solid #f1f5f9` : '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 200ms ease'
+                }}
+              >
+                LIVE
+              </button>
+              <span style={{
+                fontSize: '10px',
+                fontFamily: 'JetBrains Mono, monospace',
+                color: '#64748b',
+                border: '1px solid rgba(255,255,255,0.15)',
+                padding: '2px 6px',
+                borderRadius: '3px'
+              }}>
+                BETA
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -129,11 +329,15 @@ function App() {
             overflow: 'hidden'
           }}
         >
-          <GlobeView 
-            selectedShip={selectedShip} 
-            width={globeDimensions.width}
-            height={globeDimensions.height}
-          />
+          {viewMode === 'live' ? (
+            <GlobeView 
+              selectedShip={selectedShip} 
+              width={globeDimensions.width}
+              height={globeDimensions.height}
+            />
+          ) : (
+            <TestExplorer />
+          )}
         </div>
 
         {/* Sidebar - Desktop */}

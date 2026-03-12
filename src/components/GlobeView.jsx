@@ -219,12 +219,12 @@ export function GlobeView({ selectedShip, width, height }) {
         
         // Port rings (featured only)
         ringsData={portRings}
-        ringLat="lat"
-        ringLng="lng"
-        ringColor="color"
-        ringMaxRadius="maxRadius"
-        ringPropagationSpeed="propagationSpeed"
-        ringRepeatPeriod="repeatPeriod"
+        ringLat={d => d.lat}
+        ringLng={d => d.lng}
+        ringColor={d => () => d.color}
+        ringMaxRadius={3}
+        ringPropagationSpeed={1.5}
+        ringRepeatPeriod={2000}
       />
       
       {/* Ship progress indicator */}

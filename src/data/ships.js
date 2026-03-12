@@ -28,6 +28,56 @@ export const SHIPS = [
     color: '#a855f7',
     description: 'Post-Panamax Container Vessel',
     flag: 'Hong Kong'
+  },
+  { 
+    id: 'MSCELBE', 
+    name: 'MSC Elbe',
+    mmsi: '636092045',
+    lat: 53.5461, 
+    lon: 9.9669, 
+    color: '#06b6d4',
+    description: 'Large Container Vessel',
+    flag: 'Germany'
+  },
+  { 
+    id: 'OOCLARABIA', 
+    name: 'OOCL Arabia',
+    mmsi: '477334300',
+    lat: 25.0657, 
+    lon: 55.1713, 
+    color: '#10b981',
+    description: 'Feeder Container Vessel',
+    flag: 'Hong Kong'
+  },
+  { 
+    id: 'COSCOAFRICA', 
+    name: 'COSCO Africa',
+    mmsi: '477219600',
+    lat: 22.5431, 
+    lon: 113.8010, 
+    color: '#f97316',
+    description: 'Large Container Vessel',
+    flag: 'China'
+  },
+  { 
+    id: 'EVERGLOBE', 
+    name: 'Ever Globe',
+    mmsi: '352003100',
+    lat: 35.4437, 
+    lon: 139.6380, 
+    color: '#ec4899',
+    description: 'Large Container Vessel',
+    flag: 'Taiwan'
+  },
+  { 
+    id: 'ANLBINDAREE', 
+    name: 'ANL Bindaree',
+    mmsi: '503000001',
+    lat: 1.3521, 
+    lon: 103.8198, 
+    color: '#14b8a6',
+    description: 'Panamax Container Vessel',
+    flag: 'France'
   }
 ];
 
