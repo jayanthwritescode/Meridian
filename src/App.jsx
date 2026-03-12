@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { GlobeView } from './components/GlobeView';
 import { RouteSidebar } from './components/RouteSidebar';
-import { RouteDetailPanel } from './components/RouteDetailPanel';
-import { Menu } from 'lucide-react';
+import { DetailPanel } from './components/DetailPanel';
 import { SHIP_ROUTES } from './data/routes';
 
 function App() {
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [shipPosition, setShipPosition] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [globeDimensions, setGlobeDimensions] = useState({ width: 0, height: 0 });
@@ -40,11 +40,12 @@ function App() {
 
   const handleRouteSelect = (routeId) => {
     setSelectedRoute(routeId);
+    setShipPosition(null); // Reset ship position when route changes
   };
 
   const handleShipPositionChange = (position) => {
-    // This will be used to update the globe with the scrubber position
-    console.log('Ship position changed:', position);
+    console.log('App handleShipPositionChange called with:', position);
+    setShipPosition(position);
   };
 
   const handleMobileMenuToggle = () => {
@@ -206,14 +207,13 @@ function App() {
           </div>
         )}
 
-        {/* Route Detail Panel */}
+        {/* Detail Panel */}
         {selectedRoute && (
-          <RouteDetailPanel 
+          <DetailPanel 
             route={SHIP_ROUTES[selectedRoute]}
-            routeId={selectedRoute}
             onClose={() => setSelectedRoute(null)}
-            isMobile={isMobile}
-            onShipPositionChange={handleShipPositionChange}
+            globeRef={null} // Not needed for now
+            onPositionChange={handleShipPositionChange}
           />
         )}
       </div>

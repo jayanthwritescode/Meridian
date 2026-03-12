@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { WAYPOINT_FACTS } from '../data/routes';
 
 // Haversine distance calculation
@@ -87,33 +87,73 @@ export function VoyageScrubber({ route, routeId, ship, onPositionChange }) {
   
   const scrubberRef = useRef(null);
   const dragTimeoutRef = useRef(null);
-  const positionRef = useRef(null);
   
   // Initialize scrubber position to 0 on route select
   useEffect(() => {
     setScrubPosition(0);
   }, [routeId]);
   
-  // Calculate position and notify parent
-  const updatePosition = useCallback((progress) => {
-    if (!route) return;
+  // Interpolate position inline during render
+  const interpolatedPosition = useMemo(() => {
+    if (!route) return null;
     
-    const position = interpolatePosition(route, progress);
-    positionRef.current = position;
+    const waypoints = [route.origin, ...route.waypoints, route.destination];
     
-    if (onPositionChange) {
-      onPositionChange({
-        lat: position.lat,
-        lon: position.lon,
-        color: ship?.color || '#3b82f6',
-        size: 0.5,
-        altitude: 0.01
-      });
+    // Calculate cumulative distances
+    const distances = [];
+    let totalDistance = 0;
+    
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const segmentDistance = haversineDistance(
+        waypoints[i].lat, waypoints[i].lon,
+        waypoints[i + 1].lat, waypoints[i + 1].lon
+      );
+      distances.push(segmentDistance);
+      totalDistance += segmentDistance;
     }
     
-    // Update current fact based on position
-    updateCurrentFact(position);
-  }, [route, ship, onPositionChange]);
+    // Find which segment we're on
+    const targetDistance = scrubPosition * totalDistance;
+    let accumulatedDistance = 0;
+    let segmentIndex = 0;
+    
+    for (let i = 0; i < distances.length; i++) {
+      if (accumulatedDistance + distances[i] >= targetDistance) {
+        segmentIndex = i;
+        break;
+      }
+      accumulatedDistance += distances[i];
+    }
+    
+    // Interpolate within the segment
+    const segmentProgress = (targetDistance - accumulatedDistance) / distances[segmentIndex];
+    const start = waypoints[segmentIndex];
+    const end = waypoints[segmentIndex + 1];
+    
+    const position = {
+      lat: start.lat + (end.lat - start.lat) * segmentProgress,
+      lon: start.lon + (end.lon - start.lon) * segmentProgress,
+      segmentIndex,
+      segmentProgress,
+      currentLegName: end.legName || 'Open Ocean'
+    };
+    
+    console.log('scrub:', scrubPosition, 'pos:', position);
+    return position;
+  }, [route, scrubPosition]);
+  
+  // Update parent with interpolated position
+  useEffect(() => {
+    if (interpolatedPosition && onPositionChange) {
+      onPositionChange({
+        lat: interpolatedPosition.lat,
+        lon: interpolatedPosition.lon,
+        color: ship?.color || '#3b82f6',
+        size: 0.4,
+        altitude: 0.015
+      });
+    }
+  }, [interpolatedPosition, ship, onPositionChange]);
   
   // Update current educational fact
   const updateCurrentFact = (position) => {
@@ -150,8 +190,8 @@ export function VoyageScrubber({ route, routeId, ship, onPositionChange }) {
   // Handle scrubber change
   const handleScrubberChange = (e) => {
     const newPosition = parseFloat(e.target.value);
+    console.log('Scrubber input changed to:', newPosition);
     setScrubPosition(newPosition);
-    updatePosition(newPosition);
   };
   
   // Handle drag start

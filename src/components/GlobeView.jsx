@@ -4,7 +4,7 @@ import { SHIPS, getShipById } from '../data/ships';
 import { useVesselPosition } from '../hooks/useVesselPosition';
 import { SHIP_ROUTES } from '../data/routes';
 
-export function GlobeView({ selectedRoute, width, height }) {
+export function GlobeView({ selectedRoute, shipPosition, width, height }) {
   const globeEl = useRef();
   const { featuredVessels: featuredData, liveVessels } = useVesselPosition();
   const [shipProgress, setShipProgress] = useState(0);
@@ -37,62 +37,92 @@ export function GlobeView({ selectedRoute, width, height }) {
       }));
   }, [liveVessels, featuredData]);
 
-  // Get featured vessel markers for selected ship
-  const featuredVesselMarkers = useMemo(() => {
-    if (!selectedVessel) return [];
+  // Get port markers (pulsating dots for ports)
+  const portMarkers = useMemo(() => {
+    const markers = [];
     
-    return [{
-      ...selectedVessel,
-      size: 6,
-      isFeatured: true,
-      color: selectedVessel.color || '#3b82f6'
-    }];
-  }, [selectedVessel]);
-
-  // Get all vessel points (featured + live)
-  const allPoints = useMemo(() => {
-    const points = [];
-    
-    // Add featured vessel
-    if (selectedVessel) {
-      points.push({
-        lat: selectedVessel.lat,
-        lon: selectedVessel.lon,
-        size: 0.5,
-        color: selectedVessel.color || '#3b82f6',
-        altitude: 0.01,
-        isFeatured: true
+    Object.values(SHIP_ROUTES).forEach(route => {
+      // Origin port
+      markers.push({
+        lat: route.origin.lat,
+        lon: route.origin.lon,
+        size: 2,
+        color: '#64748b',
+        altitude: 0.01
       });
-    }
-    
-    // Add live vessels (dimmed)
-    liveVesselsPoints.forEach(vessel => {
-      points.push({
-        lat: vessel.lat,
-        lon: vessel.lon,
-        size: 0.3,
-        color: 'rgba(255,255,255,0.3)',
-        altitude: 0.005
+      
+      // Destination port
+      markers.push({
+        lat: route.destination.lat,
+        lon: route.destination.lon,
+        size: 2,
+        color: '#64748b',
+        altitude: 0.01
       });
     });
     
+    return markers;
+  }, []);
+
+  // Get all vessel points (ship only) - use shipPosition from props
+  const allPoints = useMemo(() => {
+    const points = [];
+    
+    // Add test point at New York to verify Globe is working
+    points.push({
+      lat: 40.7128,
+      lon: -74.0060,
+      size: 2,
+      color: '#ff0000',
+      altitude: 0.02
+    });
+    
+    // Add ship from scrubber position
+    if (shipPosition) {
+      const shipPoint = {
+        lat: shipPosition.lat,
+        lon: shipPosition.lon,
+        size: 1.5,
+        color: shipPosition.color || '#3b82f6',
+        altitude: 0.02
+      };
+      
+      console.log('Ship point from scrubber:', shipPoint);
+      points.push(shipPoint);
+    }
+    
     console.log('allPoints debug:', points);
     return points;
-  }, [selectedVessel, liveVesselsPoints]);
+  }, [shipPosition]);
 
-  // Get vessel rings for selected ship
+  // Get vessel rings for selected ship - use shipPosition from props
   const vesselRings = useMemo(() => {
-    if (!selectedVessel) return [];
+    const rings = [];
     
-    return [{
-      lat: selectedVessel.lat,
-      lon: selectedVessel.lon,
-      maxRadius: 4,
+    // Add test ring at New York
+    rings.push({
+      lat: 40.7128,
+      lon: -74.0060,
+      maxRadius: 3,
       propagationSpeed: 1.5,
-      repeatPeriod: 1500,
-      color: [selectedVessel.color || '#3b82f6', selectedVessel.color || '#3b82f6']
-    }];
-  }, [selectedVessel]);
+      repeatPeriod: 1200,
+      color: '#ff0000'
+    });
+    
+    // Add ship ring
+    if (shipPosition) {
+      rings.push({
+        lat: shipPosition.lat,
+        lon: shipPosition.lon,
+        maxRadius: 3,
+        propagationSpeed: 1.5,
+        repeatPeriod: 1200,
+        color: shipPosition.color || '#3b82f6'
+      });
+    }
+    
+    return rings;
+  }, [shipPosition]);
 
   // Get route arcs - only show selected route
   const routeArcs = useMemo(() => {
@@ -244,6 +274,23 @@ export function GlobeView({ selectedRoute, width, height }) {
     }
   }, [selectedRoute]);
 
+  // Debug logging
+  console.log('ship position:', shipPosition);
+  console.log('allPoints:', allPoints);
+  console.log('vesselRings:', vesselRings);
+  console.log('selectedRoute:', selectedRoute);
+  
+  // Additional debug
+  if (shipPosition) {
+    console.log('Ship position details:', {
+      lat: shipPosition.lat,
+      lon: shipPosition.lon,
+      color: shipPosition.color,
+      hasLat: !isNaN(shipPosition.lat),
+      hasLon: !isNaN(shipPosition.lon)
+    });
+  }
+
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <Globe
@@ -251,12 +298,12 @@ export function GlobeView({ selectedRoute, width, height }) {
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
         backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
         pointsData={allPoints}
-        pointLat="lat"
-        pointLng="lon"
-        pointColor="color"
-        pointAltitude="altitude"
-        pointRadius="size"
-        pointLabel="name"
+        pointLat={d => d.lat}
+        pointLng={d => d.lon}
+        pointColor={d => d.color}
+        pointAltitude={0.01}
+        pointRadius={0.6}
+        pointsMerge={false}
         arcsData={routeArcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
@@ -270,12 +317,12 @@ export function GlobeView({ selectedRoute, width, height }) {
         arcOpacity="opacity"
         arcLabel={() => ''}
         ringsData={vesselRings}
-        ringLat="lat"
-        ringLng="lon"
-        ringColor="color"
-        ringMaxRadius="maxRadius"
-        ringPropagationSpeed="propagationSpeed"
-        ringRepeatPeriod="repeatPeriod"
+        ringLat={d => d.lat}
+        ringLng={d => d.lon}
+        ringColor={d => () => d.color}
+        ringMaxRadius={3}
+        ringPropagationSpeed={1.5}
+        ringRepeatPeriod={1200}
         labelsData={portLabels}
         labelLat={d => d.lat}
         labelLng={d => d.lon}

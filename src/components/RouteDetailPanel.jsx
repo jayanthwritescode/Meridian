@@ -64,8 +64,12 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile, onShipPosi
   if (!route) return null;
 
   // Log the full route object for debugging
+  console.log('selected route fields:', JSON.stringify(route));
   console.log('RouteDetailPanel received route:', route);
   console.log('RouteDetailPanel received routeId:', routeId);
+  console.log('Route stats:', route.stats);
+  console.log('Route vessel:', route.vessel);
+  console.log('Route schedule:', route.schedule);
 
   const vessel = route.vessel || {};
   const stats = route.stats || {};
@@ -295,7 +299,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile, onShipPosi
               fontFamily: 'JetBrains Mono, monospace',
               marginBottom: '4px'
             }}>
-              {route.stats?.distance?.toLocaleString() || '0'}
+              {route.stats?.distance?.toLocaleString() || 'N/A'}
             </div>
             <div style={{
               fontSize: '10px',
@@ -316,7 +320,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile, onShipPosi
               fontFamily: 'JetBrains Mono, monospace',
               marginBottom: '4px'
             }}>
-              {route.stats?.duration ? `${route.stats.duration}d` : '0d'}
+              {route.stats?.duration ? `${route.stats.duration}d` : 'N/A'}
             </div>
             <div style={{
               fontSize: '10px',
@@ -337,7 +341,7 @@ export function RouteDetailPanel({ route, routeId, onClose, isMobile, onShipPosi
               fontFamily: 'JetBrains Mono, monospace',
               marginBottom: '4px'
             }}>
-              {route.stats?.co2 || '0'}
+              {route.stats?.co2 || 'N/A'}
             </div>
             <div style={{
               fontSize: '10px',
