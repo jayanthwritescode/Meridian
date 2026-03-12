@@ -94,31 +94,34 @@ export function GlobeView({ selectedRoute, width, height }) {
     }];
   }, [selectedVessel]);
 
-  // Get all route arcs
+  // Get route arcs - only show selected route
   const routeArcs = useMemo(() => {
-    const arcs = [];
+    if (!selectedRoute) return [];
     
-    Object.entries(SHIP_ROUTES).forEach(([routeId, route]) => {
-      const ship = SHIPS.find(s => s.id === routeId);
+    const arcs = [];
+    const route = SHIP_ROUTES[selectedRoute];
+    const ship = SHIPS.find(s => s.id === selectedRoute);
+    
+    if (route && ship) {
       const coords = [
         route.origin,
         ...route.waypoints,
         route.destination
       ];
       
-      // Create arc segments
+      // Create arc segments for selected route only
       for (let i = 0; i < coords.length - 1; i++) {
         arcs.push({
           startLat: coords[i].lat,
           startLng: coords[i].lon,
           endLat: coords[i + 1].lat,
           endLng: coords[i + 1].lon,
-          color: ship?.color || '#64748b',
-          stroke: selectedRoute === routeId ? 2 : 0.8,
-          opacity: selectedRoute === routeId ? 1 : 0.2
+          color: ship.color || '#64748b',
+          stroke: 2,
+          opacity: 1
         });
       }
-    });
+    }
     
     return arcs;
   }, [selectedRoute]);
@@ -146,50 +149,100 @@ export function GlobeView({ selectedRoute, width, height }) {
     return Array.from(uniquePorts.values());
   }, []);
 
-  // Auto-rotation control
+  // Globe controls setup - runs once after mount
   useEffect(() => {
     if (!globeEl.current) return;
     
     const globe = globeEl.current;
     
-    // Auto-rotate when no route is selected
-    if (!selectedRoute) {
-      globe.controls().autoRotate = true;
-      globe.controls().autoRotateSpeed = 0.4;
-    } else {
-      globe.controls().autoRotate = false;
-      
-      // Fly to selected route midpoint
-      const route = SHIP_ROUTES[selectedRoute];
-      if (route) {
-        const coords = [route.origin, ...route.waypoints, route.destination];
-        const midIndex = Math.floor(coords.length / 2);
-        const midpoint = coords[midIndex];
-        
-        globe.pointOfView(
-          { lat: midpoint.lat, lng: midpoint.lon, altitude: 1.8 },
-          1200
+    // Enable auto-rotation
+    globe.controls().autoRotate = true;
+    globe.controls().autoRotateSpeed = 0.4;
+  }, []);
+
+  // Calculate great-circle distance between two points
+  const calculateGreatCircleDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Calculate optimal camera position for route
+  const calculateOptimalCameraPosition = (route) => {
+    // Get all waypoints including origin and destination
+    const allWaypoints = [route.origin, ...route.waypoints, route.destination];
+    
+    // Calculate geographic center (centroid of all waypoints)
+    const centerLat = allWaypoints.reduce((sum, wp) => sum + wp.lat, 0) / allWaypoints.length;
+    const centerLon = allWaypoints.reduce((sum, wp) => sum + wp.lon, 0) / allWaypoints.length;
+    
+    // Calculate angular spread - max distance between any two waypoints
+    let maxDistance = 0;
+    for (let i = 0; i < allWaypoints.length; i++) {
+      for (let j = i + 1; j < allWaypoints.length; j++) {
+        const distance = calculateGreatCircleDistance(
+          allWaypoints[i].lat, allWaypoints[i].lon,
+          allWaypoints[j].lat, allWaypoints[j].lon
         );
+        maxDistance = Math.max(maxDistance, distance);
       }
+    }
+    
+    // Map spread to altitude
+    let altitude;
+    if (maxDistance < 3000) altitude = 1.2;
+    else if (maxDistance < 8000) altitude = 1.8;
+    else if (maxDistance < 15000) altitude = 2.2;
+    else altitude = 2.6;
+    
+    // Adjust tilt based on hemisphere
+    let finalLat = centerLat;
+    if (centerLat < 15) {
+      // Route crosses equator significantly, tilt slightly south
+      finalLat = centerLat - 8;
+    }
+    
+    return { lat: finalLat, lng: centerLon, altitude };
+  };
+
+  // Camera fly to selected route with cinematic animation
+  useEffect(() => {
+    if (!globeEl.current || !selectedRoute) return;
+    
+    const globe = globeEl.current;
+    const route = SHIP_ROUTES[selectedRoute];
+    
+    if (route) {
+      const optimalPosition = calculateOptimalCameraPosition(route);
+      
+      // Stage 1: Pull back to altitude 3.5 over 400ms
+      globe.pointOfView({ altitude: 3.5 }, 400);
+      
+      // Stage 2: Fly to optimal position after 400ms delay
+      setTimeout(() => {
+        globe.pointOfView(optimalPosition, 1200);
+        
+        // Stage 3: Slow rotation after fly completes (1600ms total)
+        setTimeout(() => {
+          globe.controls().autoRotateSpeed = 0.2;
+        }, 1200);
+      }, 400);
     }
   }, [selectedRoute]);
 
-  // Handle user interaction to pause auto-rotation
+  // Reset rotation speed when no route selected
   useEffect(() => {
     if (!globeEl.current) return;
     
-    const globe = globeEl.current;
-    
-    const handleInteraction = () => {
-      globe.controls().autoRotate = false;
-    };
-    
-    globe.controls().addEventListener('start', handleInteraction);
-    
-    return () => {
-      globe.controls().removeEventListener('start', handleInteraction);
-    };
-  }, []);
+    if (!selectedRoute) {
+      globeEl.current.controls().autoRotateSpeed = 0.4;
+    }
+  }, [selectedRoute]);
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
