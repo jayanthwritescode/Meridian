@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { SHIPS, getShipByCode } from '../data/ships';
+import { useAISStream } from '../hooks/useAISStream';
+import { getMMSIList } from '../data/aisConfig';
 
 export function ShipSelector({ selectedShip, onShipSelect }) {
   const [shipCode, setShipCode] = useState('');
+  const mmsiList = getMMSIList();
+  const { connectionStatus } = useAISStream(mmsiList);
 
   const handleShipSelect = (shipId) => {
     onShipSelect(shipId);
@@ -17,9 +21,36 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
     }
   };
 
+  const getStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected': return 'text-green-400';
+      case 'connecting': return 'text-yellow-400';
+      case 'reconnecting': return 'text-orange-400';
+      case 'stale': return 'text-orange-400';
+      case 'error': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (connectionStatus) {
+      case 'connected': return '● LIVE';
+      case 'connecting': return '● CONNECTING';
+      case 'reconnecting': return '● RECONNECTING';
+      case 'stale': return '● STALE DATA';
+      case 'error': return '● CONNECTION ERROR';
+      default: return '○ DISCONNECTED';
+    }
+  };
+
   return (
     <div className="absolute top-4 left-4 z-50 bg-navy/90 border border-white/20 rounded-lg p-4 w-80">
-      <h3 className="text-white font-bold mb-3 font-syne">Ship Tracker</h3>
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-white font-bold font-syne">Ship Tracker</h3>
+        <div className={`text-xs font-mono ${getStatusColor()}`}>
+          {getStatusText()}
+        </div>
+      </div>
       
       {/* Ship List */}
       <div className="space-y-2 mb-4">
@@ -35,6 +66,7 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
           >
             <div className="font-medium">{ship.name}</div>
             <div className="text-xs opacity-75">{ship.description}</div>
+            <div className="text-xs opacity-50">MMSI: {ship.mmsi}</div>
           </button>
         ))}
       </div>
@@ -64,6 +96,13 @@ export function ShipSelector({ selectedShip, onShipSelect }) {
           Clear Selection
         </button>
       )}
+
+      <div className="mt-3 pt-3 border-t border-white/10">
+        <div className="text-xs text-gray-400 font-mono">
+          <div>API: AISStream.io</div>
+          <div>Tracking: {mmsiList.length} vessels</div>
+        </div>
+      </div>
     </div>
   );
 }

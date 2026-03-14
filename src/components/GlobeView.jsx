@@ -1,13 +1,28 @@
 import { useRef, useEffect } from 'react';
 import Globe from 'react-globe.gl';
-import { SHIPS, getShipById } from '../data/ships';
+import { SHIPS, getShipById, getShipByMMSI } from '../data/ships';
+import { useAISStream } from '../hooks/useAISStream';
+import { getMMSIList } from '../data/aisConfig';
 
 export function GlobeView({ selectedShip }) {
   const globeEl = useRef();
+  const mmsiList = getMMSIList();
+  const { positions, connectionStatus } = useAISStream(mmsiList);
 
-  // Only show selected ship
+  // Merge static ship data with AIS positions
   const displayShips = selectedShip 
-    ? SHIPS.filter(ship => ship.id === selectedShip)
+    ? SHIPS.filter(ship => ship.id === selectedShip).map(ship => {
+        const aisData = positions.get(ship.mmsi);
+        return {
+          ...ship,
+          lat: aisData ? aisData.lat : ship.lat,
+          lon: aisData ? aisData.lon : ship.lon,
+          speed: aisData?.speed || null,
+          heading: aisData?.heading || null,
+          live: !!aisData,
+          lastUpdate: aisData?.timestamp || null
+        };
+      })
     : [];
 
   useEffect(() => {
@@ -39,7 +54,7 @@ export function GlobeView({ selectedShip }) {
         atmosphereColor="#1a6eff"
         atmosphereAltitude={0.15}
         
-        // Only render selected ship
+        // Render selected ship with real-time data
         pointsData={displayShips}
         pointLat="lat"
         pointLng="lon"
